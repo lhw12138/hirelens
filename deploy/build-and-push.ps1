@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference="Stop"
 $prefix="$Registry/$Namespace"
 docker build --target web -t "$prefix/hirelens-web:$Tag" .
-docker build --target worker -t "$prefix/hirelens-worker:$Tag" .
+docker build -f Dockerfile.worker -t "$prefix/hirelens-worker:$Tag" .
 docker build -f Dockerfile.embeddings -t "$prefix/hirelens-rag:$Tag" .
 docker push "$prefix/hirelens-web:$Tag"
 docker push "$prefix/hirelens-worker:$Tag"

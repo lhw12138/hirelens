@@ -30,6 +30,8 @@
 .\deploy\build-and-push.ps1 -Registry <ACR公网地址> -Namespace <命名空间> -Tag v0.1.0
 ```
 
+如改用 ACR 代码源构建，为三个仓库绑定同一个 GitHub 仓库和 `main` 分支，并分别使用根目录下的 `Dockerfile`、`Dockerfile.worker`、`Dockerfile.embeddings`。香港地域建议开启“海外机器构建”，关闭“不使用缓存”。
+
 三个镜像使用同一版本号，发生问题时在 SAE 版本列表回滚到上一个标签。
 
 ## 配置顺序
