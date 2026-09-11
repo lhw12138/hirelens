@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: hirelens
+      POSTGRES_USER: hirelens
+      POSTGRES_PASSWORD: hirelens
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U hirelens"], interval: 5s, timeout: 3s, retries: 12 }
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: hirelens
+      MINIO_ROOT_PASSWORD: hirelens-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+  web:
+    build: { context: ., target: web }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://hirelens:hirelens@postgres:5432/hirelens
+      S3_ENDPOINT: http://minio:9000
+      RAG_LOCAL_URL: http://embeddings:3041
+    ports: ["3000:3000"]
+    depends_on: { postgres: { condition: service_healthy }, embeddings: { condition: service_started } }
+  embeddings:
+    build: { context: ., dockerfile: Dockerfile.embeddings }
+    environment:
+      RAG_LOCAL_TOKEN: ${RAG_LOCAL_TOKEN:-hirelens-local-embeddings}
+    ports: ["127.0.0.1:3041:3041"]
+    volumes: ["embedding-models:/models/e5"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3041/health',{headers:{authorization:'Bearer '+(process.env.RAG_LOCAL_TOKEN||'hirelens-local-embeddings')}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+  worker:
+    restart: unless-stopped
+    build: { context: ., target: worker }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://hirelens:hirelens@postgres:5432/hirelens
+      S3_ENDPOINT: http://minio:9000
+      RAG_LOCAL_URL: http://embeddings:3041
+    depends_on: { postgres: { condition: service_healthy }, embeddings: { condition: service_started } }
+volumes: { postgres-data: {}, minio-data: {}, embedding-models: {} }

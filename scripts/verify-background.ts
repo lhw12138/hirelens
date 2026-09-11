@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {getPool} from '../src/server/db/client';
+import {processScoringJob} from '../src/server/workflow/scoring-worker';
+import {sampleCriteria,sampleJd,sampleResume,questionsFor,type HiringTask} from '../src/lib/workflow';
+const db=getPool();const id=randomUUID(),candidateId=randomUUID();
+const task:HiringTask={id,title:'后台评分与删除验收（合成）',jd:sampleJd,synthetic:true,confirmed:true,criteria:sampleCriteria,candidates:[{id:candidateId,name:'测试候选人（合成）',synthetic:true,filename:'synthetic',resume:sampleResume,resumeConfirmed:true,sources:[{id:'test-resume',kind:'resume',locator:'合成原文',text:sampleResume}],questions:questionsFor(sampleCriteria),answers:{},interviewComplete:false}],audit:[]};
+const base='http://localhost:3000';
+try{
+ await db.query('INSERT INTO hiring_tasks(id,owner_email,data) VALUES($1,$2,$3::jsonb)',[id,process.env.HR_ADMIN_EMAIL||'admin@hirelens.local',JSON.stringify(task)]);
+ const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:process.env.HR_ADMIN_EMAIL||'admin@hirelens.local',password:process.env.HR_ADMIN_PASSWORD||'hirelens-demo'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie')!.split(';')[0];
+ const get=async()=>{const r=await fetch(base+'/api/tasks/'+id,{headers:{cookie}});return{status:r.status,row:await r.json()};};
+ const mutate=async(method:string,body:unknown)=>{const r=await fetch(base+'/api/tasks/'+id,{method,headers:{cookie,'content-type':'application/json'},body:JSON.stringify(body)});return{status:r.status,row:await r.json()};};
+ assert.equal((await fetch(base+'/api/tasks/'+id,{method:'DELETE',headers:{'content-type':'application/json'},body:'{"version":1}'})).status,401);
+ const first=await mutate('POST',{action:'screen',candidateId,version:1});assert.equal(first.status,202);assert.equal(first.row.data.scoringJob.status,'queued');
+ assert.equal((await mutate('POST',{action:'screen',candidateId,version:first.row.version})).status,409);
+ let entered!:()=>void;const ready=new Promise<void>(r=>entered=r);let release!:()=>void;const barrier=new Promise<void>(r=>release=r);
+ const fake=async()=>{entered();await barrier;throw new Error('synthetic failure');};
+ const work=processScoringJob(fake,id);await ready;
+ assert.equal((await get()).row.data.scoringJob.status,'running');
+ assert.equal(await processScoringJob(fake,id),false);
+ release();await work;
+ const failed=await get();assert.equal(failed.row.data.scoringJob.status,'failed');assert.ok(!failed.row.data.candidates[0].screening);
+ assert.equal((await mutate('POST',{action:'screen',candidateId,version:failed.row.version})).status,202);
+ let enterAgain!:()=>void;const readyAgain=new Promise<void>(r=>enterAgain=r);let releaseAgain!:()=>void;const barrierAgain=new Promise<void>(r=>releaseAgain=r);
+ const late=processScoringJob(async()=>{enterAgain();await barrierAgain;throw Error('late failure');},id);await readyAgain;
+ const running=await get();assert.equal((await mutate('DELETE',{version:running.row.version})).status,200);
+ releaseAgain();await late;
+ assert.equal((await get()).status,404);
+ const list=await(await fetch(base+'/api/tasks',{headers:{cookie}})).json();assert.ok(!list.some((r:{id:string})=>r.id===id));
+ const deleted=await(await fetch(base+'/api/tasks?deleted=true',{headers:{cookie}})).json();const item=deleted.find((r:{id:string})=>r.id===id);assert.equal(item.data.scoringJob.status,'cancelled');
+ assert.equal((await mutate('PATCH',{version:item.version})).status,200);
+ assert.equal((await get()).status,200);
+ console.log(JSON.stringify({status:'passed',id,checks:['auth','durable enqueue','duplicate rejection','single claim','failure persisted','retry','delete while running','late result fenced','hidden deleted task','restore']}));
+}finally{await db.end();}

@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const runtime = process.env.HIRELENS_TEST_RUNTIME;
+if (!runtime) throw new Error('Set HIRELENS_TEST_RUNTIME to the bundled node_modules directory.');
+const { chromium } = require(runtime+'/playwright');
+const JSZip = require(runtime+'/jszip');
+const { PDFDocument, StandardFonts } = require(runtime+'/pdf-lib');
+const base = process.env.HIRELENS_TEST_URL || 'http://localhost:3000';
+const browser = await chromium.launch({channel:'msedge',headless:true});
+try {
+  const context = await browser.newContext();
+  const api = context.request;
+  const login = await api.post(base+'/api/auth/login',{data:{email:process.env.HR_ADMIN_EMAIL||'admin@hirelens.local',password:process.env.HR_ADMIN_PASSWORD||'hirelens-demo'}});
+  assert.equal(login.status(),200);
+  const content = 'Synthetic interview record. Led requirement reviews and acceptance testing. Email: synthetic@example.com. Phone: 13800138000.';
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml','<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  zip.file('_rels/.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/document.xml','<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'+content+'</w:t></w:r></w:p></w:body></w:document>');
+  const docx = await zip.generateAsync({type:'nodebuffer'});
+  const upload = async(name,mimeType,buffer,status=200)=>{
+    const r=await api.post(base+'/api/documents/parse',{multipart:{file:{name,mimeType,buffer}}});
+    const d=await r.json();assert.equal(r.status(),status,JSON.stringify(d));return d;
+  };
+  const d=await upload('synthetic.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document',docx);
+  assert.ok(d.redactedText.includes('Led requirement reviews'));
+  assert.ok(!d.redactedText.includes('synthetic@example.com'));
+  assert.ok(!d.redactedText.includes('13800138000'));
+  const pdf=await PDFDocument.create();const p=pdf.addPage();const font=await pdf.embedFont(StandardFonts.Helvetica);
+  p.drawText(content,{x:30,y:700,font,size:9});
+  const parsed=await upload('synthetic.pdf','application/pdf',Buffer.from(await pdf.save()));
+  assert.equal(parsed.pageCount,1);assert.ok(parsed.chunks.length>0);
+  await upload('broken.pdf','application/pdf',Buffer.from('broken synthetic file'),422);
+  const blank=await PDFDocument.create();blank.addPage();
+  const empty=await upload('no-text.pdf','application/pdf',Buffer.from(await blank.save()),422);
+  assert.ok(empty.error.includes('扫描版'));
+  await upload('unsupported.txt','text/plain',Buffer.from(content),422);
+  await upload('oversize.pdf','application/pdf',Buffer.alloc(8*1024*1024+1),413);
+  const guest=await browser.newContext();
+  assert.equal((await guest.request.post(base+'/api/documents/parse',{multipart:{file:{name:'synthetic.docx',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',buffer:docx}}})).status(),401);
+  const cross=await api.post(base+'/api/tasks',{headers:{origin:'https://unrelated.example'},data:{synthetic:true}});
+  assert.equal(cross.status(),403);
+  console.log('PASS DOCX, text PDF, PII redaction, damaged/blank/unsupported/oversize files, unauthorized upload, cross-origin rejection');
+}finally{await browser.close();}

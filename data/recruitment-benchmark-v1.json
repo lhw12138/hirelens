@@ -1,0 +1,58 @@
+{
+  "version": "recruitment-benchmark-v1.0",
+  "createdAt": "2026-09-10",
+  "purpose": "验证通用招聘工作流的相对区分度、硬性条件状态、证据使用与身份信息隔离。",
+  "absoluteScoreGates": false,
+  "limitations": [
+    "资料全部为合成样本，不代表真实候选人分布。",
+    "基准不规定未来候选人的绝对分数，也不参与模型提示词或线上评分。",
+    "三个岗位只用于回归测试，不构成产品支持岗位白名单。"
+  ],
+  "tasks": [
+    {
+      "datasetKey": "user-synthetic-ai产品经理",
+      "title": "AI产品经理（大模型应用方向）",
+      "stages": {
+        "screening": {
+          "tiers": [["林泽宇"], ["周沐晴"], ["高建国", "吴桐"]],
+          "hardRequirements": { "林泽宇": "met", "周沐晴": "unmet", "高建国": "unmet", "吴桐": "unmet" }
+        },
+        "combined": {
+          "tiers": [["林泽宇"], ["周沐晴"], ["吴桐", "高建国"]],
+          "hardRequirements": { "林泽宇": "met", "周沐晴": "unmet", "吴桐": "unmet", "高建国": "unmet" },
+          "minimumStatusCounts": { "insufficient": 1 }
+        }
+      }
+    },
+    {
+      "datasetKey": "user-synthetic-数据分析师",
+      "title": "数据分析师（用户增长方向）",
+      "stages": {
+        "screening": {
+          "tiers": [["陈思远"], ["林晓雯"], ["王浩然", "赵鹏飞"]],
+          "hardRequirements": { "陈思远": "met", "林晓雯": "unmet", "王浩然": "unmet", "赵鹏飞": "unmet" }
+        },
+        "combined": {
+          "tiers": [["陈思远"], ["林晓雯"], ["王浩然", "赵鹏飞"]],
+          "hardRequirements": { "陈思远": "met", "林晓雯": "unmet", "王浩然": "unmet", "赵鹏飞": "unmet" },
+          "minimumStatusCounts": { "insufficient": 1 }
+        }
+      }
+    },
+    {
+      "datasetKey": "user-synthetic-后端工程师",
+      "title": "高级后端开发工程师",
+      "stages": {
+        "screening": {
+          "tiers": [["沈亦舟"], ["郑开峰"], ["马国强", "林晓棠"]],
+          "hardRequirements": { "沈亦舟": "met", "郑开峰": "unmet", "马国强": "unmet", "林晓棠": "unmet" }
+        },
+        "combined": {
+          "tiers": [["沈亦舟"], ["郑开峰"], ["马国强", "林晓棠"]],
+          "hardRequirements": { "沈亦舟": "met", "郑开峰": "met", "马国强": "unmet", "林晓棠": "unmet" },
+          "minimumStatusCounts": { "insufficient": 1 }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+"use client";
+import { useEffect,useState } from "react";
+import Link from "next/link";
+import type {TaskRecord} from "@/lib/workflow";
+export function Records(){const [rows,setRows]=useState<TaskRecord[]>([]);const [error,setError]=useState("");const [loading,setLoading]=useState(true);useEffect(()=>{fetch("/api/tasks").then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error);setRows(d);}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);return <div><h1>操作记录</h1><p>这里只显示真实保存的操作，示例任务单独标明。</p>{error&&<p role="alert" className="hl-error">{error}</p>}{loading?<p role="status">正在加载…</p>:!rows.length?<p className="hl-empty">尚无记录。<Link href="/">返回首页创建任务</Link></p>:rows.map(row=><section key={row.id} className="hl-history"><h2><Link href={"/tasks/"+row.id}>{row.data.title||"未命名任务"}</Link></h2><p>{row.data.synthetic?"合成体验":"招聘任务"}</p><ol>{[...row.data.audit].reverse().map((e,i)=><li key={i}><time>{new Date(e.at).toLocaleString("zh-CN")}</time><span>{e.action}</span></li>)}</ol></section>)}</div>;}

@@ -1,0 +1,33 @@
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, Archive, ArrowRight, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import {scoringLabel} from "@/lib/scoring-job";
+import { currentStep, steps, type TaskRecord } from "@/lib/workflow";
+export function TaskHome() {
+  const router=useRouter();
+  const [rows,setRows]=useState<TaskRecord[]|null>(null);
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [deleted,setDeleted]=useState(false);
+  const [notice,setNotice]=useState("");
+  async function load(){ setError(""); try { const r=await fetch("/api/tasks"+(deleted?"?archived=true":"")); const data=await r.json(); if(!r.ok)throw new Error(data.error); setRows(data); }catch(e){setError((e as Error).message);} }
+  useEffect(()=>{const controller=new AbortController();fetch("/api/tasks"+(deleted?"?archived=true":""),{signal:controller.signal}).then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error);setRows(data);}).catch(e=>{if(e.name!=="AbortError")setError(e.message);});return()=>controller.abort();},[deleted]);
+  useEffect(()=>{const timer=setInterval(()=>{fetch("/api/tasks"+(deleted?"?archived=true":"")).then(async r=>{if(r.ok)setRows(await r.json());}).catch(()=>{});},4000);return()=>clearInterval(timer);},[deleted]);
+  async function remove(row:TaskRecord){if(!window.confirm("归档「"+(row.data.title||"未命名招聘任务")+"」？归档后不会出现在进行中列表，可以恢复；正在执行的评分将停止。"))return;await change(row,"DELETE");}
+  async function change(row:TaskRecord,method:string){setBusy(true);setError("");try{const r=await fetch("/api/tasks/"+row.id,{method,headers:{"content-type":"application/json"},body:JSON.stringify({version:row.version})});const d=await r.json();if(!r.ok)throw Error(d.error);setNotice(method==="DELETE"?"任务已归档。":"任务已恢复；被取消的评分需要重新提交。");await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function purge(row:TaskRecord){const title=row.data.title||"未命名招聘任务";const entered=window.prompt(`永久删除后，候选人资料、评分、向量和通知记录都无法恢复。\n\n请输入任务名称确认：${title}`);if(entered===null)return;setBusy(true);setError("");try{const r=await fetch(`/api/tasks/${row.id}/lifecycle`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"purgeTask",version:row.version,confirmTitle:entered})});const data=await r.json();if(!r.ok)throw Error(data.error);setNotice("任务及全部关联数据已永久删除，无法恢复。");await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function create(synthetic:boolean){setBusy(true);setError("");try{const r=await fetch("/api/tasks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({synthetic})});const row=await r.json();if(!r.ok)throw new Error(row.error);router.push("/tasks/"+row.id);}catch(e){setError((e as Error).message);setBusy(false);}}
+  const failed=deleted?[]:(rows||[]).filter(row=>row.data.scoringJob?.status==="failed");
+  return <div className="hl-home">
+    <section className="hl-intro"><div><h1>从一份 JD，开始招聘评估。</h1><p>筛选简历、整理面试记录，基于原文形成你的判断。</p></div><button className="hl-primary" disabled={busy} onClick={()=>create(false)}><Plus size={18}/>新建招聘任务</button></section>
+    <section className="hl-start" aria-labelledby="start-title"><div className="hl-start-copy"><h2 id="start-title">第一次使用？跟着示例走一遍。</h2><p>岗位、简历和回答都已准备好。你只需要逐步确认，最后体验一次有证据的评估。</p><button className="hl-primary" onClick={()=>create(true)} disabled={busy}>{busy ? "正在创建…" : "用示例开始体验"}<ArrowRight size={17}/></button><small>全部为合成资料，不对应真实求职者。</small></div><ol className="hl-roadmap">{steps.map((s,i)=><li key={s}><span>{i+1}</span><div><strong>{s}</strong><p>{["明确要招什么样的人","按评分排名，选择面试人选","发邮件通知，上传面试记录","核对原文，留下你的判断"][i]}</p></div></li>)}</ol></section>
+    {error && <div role="alert" className="hl-error">{error}<button className="hl-quiet" onClick={load}>重新加载</button>{error.includes("登录")&&<Link href="/login">去登录</Link>}</div>}
+    {failed.length>0?<section className="hl-failed-work" aria-labelledby="failed-work-title"><AlertTriangle size={21}/><div><h2 id="failed-work-title">有 {failed.length} 项评分需要处理</h2><p>候选人资料和已有结果都已保留。打开任务后可按提示重新评分。</p><div>{failed.slice(0,3).map(row=><Link key={row.id} href={`/tasks/${row.id}`}>{row.data.title||"未命名招聘任务"}<span>{row.data.scoringJob?.errorCode||"评分未完成"}</span><ArrowRight size={15}/></Link>)}</div>{failed.length>3?<small>另有 {failed.length-3} 项，请在下方任务列表中查看。</small>:null}</div><Link href="/health" className="hl-secondary">检查系统状态</Link></section>:null}
+    <section className="hl-task-list"><div className="hl-section-title"><h2>{deleted?"已归档任务":"继续工作"}</h2><button className="hl-quiet" disabled={busy} onClick={()=>{setDeleted(!deleted);setRows(null);}}>{deleted?"返回继续工作":"查看已归档"}</button><button className="hl-quiet" aria-label="刷新任务" onClick={load}><RefreshCw size={16}/></button></div>
+      {notice&&<p role="status">{notice}</p>}{rows===null&&!error?<p role="status">正在加载已保存的任务…</p>:rows?.length===0?<div className="hl-empty"><h3>{deleted?"没有已归档任务":"还没有进行中的任务"}</h3><p>{deleted?"归档后的任务会出现在这里，并可恢复或永久删除。":"先用上方示例体验，或新建任务粘贴自己的 JD。"}</p></div>:
+      rows?.map(row=>{const t=row.data;const p=t.candidates.find(c=>!c.review)||t.candidates[0];const complete=t.candidates.length>0&&t.candidates.every(c=>c.review);const scoringFailed=t.scoringJob?.status==="failed";return <div key={row.id} className={`hl-task-item${scoringFailed?" is-failed":""}`}><Link href={"/tasks/"+row.id} className="hl-task-row" aria-disabled={deleted} onClick={e=>{if(deleted)e.preventDefault();}}><div><strong>{t.title||"未命名招聘任务"}</strong><p>{t.synthetic?"合成体验 · ":""}{t.candidates.length} 位候选人 · {deleted&&t.purgeAfter?`${new Date(t.purgeAfter).toLocaleDateString("zh-CN")} 后永久删除`:`${new Date(row.updatedAt).toLocaleString("zh-CN",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})} 保存`}{scoringFailed?` · ${t.scoringJob?.error||"资料已保留"}`:""}</p></div><span>{!deleted&&t.scoringJob?<small>{scoringLabel(t.scoringJob)} · </small>:null}{deleted?"已停止后续处理":scoringFailed?"打开并重新评分":complete?"查看已确认评估":"下一步："+steps[currentStep(t,p)]}{!deleted&&<ArrowRight size={17}/>}</span></Link><div className="hl-task-lifecycle-actions">{deleted?<><button className="hl-quiet" disabled={busy} aria-label={"恢复任务："+(t.title||"未命名招聘任务")} onClick={()=>change(row,"PATCH")}><RotateCcw size={15}/>恢复</button><button className="hl-danger-link" disabled={busy} aria-label={"永久删除任务："+(t.title||"未命名招聘任务")} onClick={()=>purge(row)}><Trash2 size={15}/>永久删除</button></>:<button className="hl-quiet" disabled={busy} aria-label={"归档任务："+(t.title||"未命名招聘任务")} onClick={()=>remove(row)}><Archive size={15}/>归档</button>}</div></div>;})}
+    </section>
+  </div>;
+}
