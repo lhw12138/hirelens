@@ -1,0 +1,100 @@
+name: hirelens
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hirelens
+      POSTGRES_USER: hirelens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.server}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hirelens -d hirelens"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env.server}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env.server}
+    volumes:
+      - minio-data:/data
+    networks: [internal]
+
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on: [minio]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until mc alias set local http://minio:9000 "$${S3_ACCESS_KEY}" "$${S3_SECRET_KEY}"; do sleep 2; done;
+        mc mb --ignore-existing local/hirelens
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env.server}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env.server}
+    networks: [internal]
+
+  embeddings:
+    image: crpi-4fkhws73w191q1aj.cn-hongkong.personal.cr.aliyuncs.com/hirelens/hirelens-rag:${IMAGE_TAG:-v0.1.0}
+    restart: unless-stopped
+    environment:
+      RAG_LOCAL_TOKEN: ${RAG_LOCAL_TOKEN:?set RAG_LOCAL_TOKEN in .env.server}
+      RAG_MODEL_HOST: ${RAG_MODEL_HOST:-https://modelscope.cn/}
+      RAG_OFFLINE: "false"
+    volumes:
+      - embedding-models:/models/e5
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3041/health',{headers:{authorization:'Bearer '+process.env.RAG_LOCAL_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 10s
+      start_period: 240s
+      retries: 8
+    networks: [internal, public]
+
+  worker:
+    image: crpi-4fkhws73w191q1aj.cn-hongkong.personal.cr.aliyuncs.com/hirelens/hirelens-worker:${IMAGE_TAG:-v0.1.0}
+    restart: unless-stopped
+    env_file: .env.server
+    environment:
+      DATABASE_URL: postgres://hirelens:${POSTGRES_PASSWORD}@postgres:5432/hirelens
+      S3_ENDPOINT: http://minio:9000
+      RAG_LOCAL_URL: http://embeddings:3041
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      embeddings: { condition: service_started }
+    networks: [internal, public]
+
+  web:
+    image: crpi-4fkhws73w191q1aj.cn-hongkong.personal.cr.aliyuncs.com/hirelens/hirelens-web:${IMAGE_TAG:-v0.1.0}
+    restart: unless-stopped
+    env_file: .env.server
+    environment:
+      DATABASE_URL: postgres://hirelens:${POSTGRES_PASSWORD}@postgres:5432/hirelens
+      S3_ENDPOINT: http://minio:9000
+      RAG_LOCAL_URL: http://embeddings:3041
+    ports:
+      - "80:3000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      embeddings: { condition: service_started }
+    networks: [internal, public]
+
+networks:
+  internal:
+    internal: true
+  public: {}
+
+volumes:
+  postgres-data: {}
+  minio-data: {}
+  embedding-models: {}
