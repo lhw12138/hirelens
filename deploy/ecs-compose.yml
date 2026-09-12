@@ -67,6 +67,11 @@ services:
       DATABASE_URL: postgres://hirelens:${POSTGRES_PASSWORD}@postgres:5432/hirelens
       S3_ENDPOINT: http://minio:9000
       RAG_LOCAL_URL: http://embeddings:3041
+    # v0.1.0 worker image omitted tsconfig.json, which tsx needs to resolve @/*.
+    # Keep this read-only mount for backward-compatible recovery; newer images
+    # also include the file directly.
+    volumes:
+      - ../tsconfig.json:/app/tsconfig.json:ro
     depends_on:
       postgres: { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }
