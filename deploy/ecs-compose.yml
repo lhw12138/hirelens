@@ -18,7 +18,7 @@ services:
     networks: [internal]
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: server /data
     environment:
@@ -29,7 +29,7 @@ services:
     networks: [internal]
 
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     restart: "no"
     depends_on: [minio]
     entrypoint: ["/bin/sh", "-c"]
