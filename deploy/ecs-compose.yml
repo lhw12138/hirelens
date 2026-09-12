@@ -86,12 +86,24 @@ services:
       DATABASE_URL: postgres://hirelens:${POSTGRES_PASSWORD}@postgres:5432/hirelens
       S3_ENDPOINT: http://minio:9000
       RAG_LOCAL_URL: http://embeddings:3041
-    ports:
-      - "80:3000"
     depends_on:
       postgres: { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }
       embeddings: { condition: service_started }
+    networks: [internal, public]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web]
     networks: [internal, public]
 
 networks:
@@ -103,3 +115,5 @@ volumes:
   postgres-data: {}
   minio-data: {}
   embedding-models: {}
+  caddy-data: {}
+  caddy-config: {}

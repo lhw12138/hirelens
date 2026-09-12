@@ -8,7 +8,7 @@
 
 - TCP 22：来源限制为维护人员当前公网 IP；不用 SSH 时关闭。
 - TCP 80：允许 `0.0.0.0/0`，供演示网站访问。
-- TCP 443：绑定域名和 HTTPS 后再开放。
+- TCP 443：允许 `0.0.0.0/0`，供 HTTPS 网站访问。
 
 不要开放 3000、3041、5432、9000 或 9001。数据库、RAG 和文件存储只在 Docker 内部网络通信。
 
@@ -69,7 +69,7 @@ curl -fsS http://127.0.0.1/api/live
 sudo docker compose --env-file .env.server -f ecs-compose.yml logs --tail=100 web worker embeddings
 ```
 
-浏览器访问 `http://<ECS 公网 IP>`。绑定域名和 HTTPS 前不要输入真实简历，只使用合成数据。
+将域名 `merittrace.cyou` 的 A 记录解析到 ECS 公网 IP 后，Caddy 会自动申请和续期 HTTPS 证书。浏览器使用 `https://merittrace.cyou` 访问。
 
 更新镜像：
 
