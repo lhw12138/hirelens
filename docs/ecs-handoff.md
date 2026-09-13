@@ -38,7 +38,7 @@ docker compose --env-file .env.server -f ecs-compose.yml run --rm --no-deps \
 
 ## 候选人自测发布（尚未部署）
 
-候选人匹配功能需要先运行 `0008_candidate_self_service.sql` 数据库迁移，并在现有 `deploy/.env.server` 中增加至少 16 位的 `CANDIDATE_ACCESS_CODE`。注册保持邀请制。
+候选人匹配功能需要先运行 `0008_candidate_self_service.sql` 数据库迁移。候选人可使用邮箱和至少 12 位密码直接注册，不需要额外环境变量。
 
 上传接口不保存原文件。联系信息在解析时脱敏，并在调用已配置模型前再次强制脱敏。报告与 HR 招聘任务物理分表，只按候选人账号读取，候选人可以删除自己的报告。
 

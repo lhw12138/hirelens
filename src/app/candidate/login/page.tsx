@@ -12,8 +12,14 @@ export default function CandidateLoginPage() {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
     const form = new FormData(event.currentTarget);
+    const password = String(form.get('password') ?? '');
+    if (action === 'register' && password !== form.get('passwordConfirmation')) {
+      setError('两次输入的密码不一致，请核对后再试。');
+      setBusy(false);
+      return;
+    }
     try {
-      const response = await fetch('/api/candidate/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, email: form.get('email'), password: form.get('password'), accessCode: form.get('accessCode') }) });
+      const response = await fetch('/api/candidate/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, email: form.get('email'), password }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       router.replace('/candidate'); router.refresh();
@@ -28,13 +34,13 @@ export default function CandidateLoginPage() {
       <ul><li>分析前自动隐藏邮箱、手机号、证件号与详细地址</li><li>不预测录用结果，不替招聘方作决定</li><li>报告只在你的账号中保存，可随时删除</li></ul>
     </section>
     <section className="candidate-auth-form" aria-labelledby="auth-title">
-      <div className="auth-tabs" role="tablist"><button role="tab" aria-selected={action === 'login'} className={action === 'login' ? 'active' : ''} onClick={() => setAction('login')}>登录</button><button role="tab" aria-selected={action === 'register'} className={action === 'register' ? 'active' : ''} onClick={() => setAction('register')}>凭邀请注册</button></div>
+      <div className="auth-tabs" role="tablist"><button type="button" role="tab" aria-selected={action === 'login'} className={action === 'login' ? 'active' : ''} onClick={() => { setAction('login'); setError(''); }}>登录</button><button type="button" role="tab" aria-selected={action === 'register'} className={action === 'register' ? 'active' : ''} onClick={() => { setAction('register'); setError(''); }}>注册</button></div>
       <h2 id="auth-title">{action === 'login' ? '继续你的材料自测' : '创建候选人账号'}</h2>
       <form onSubmit={submit}>
         <label>邮箱<input name="email" type="email" autoComplete="email" required /></label>
-        <label>密码<input name="password" type="password" minLength={12} maxLength={72} autoComplete={action === 'login' ? 'current-password' : 'new-password'} required /></label>
-        {action === 'register' && <label>邀请码<input name="accessCode" type="password" autoComplete="off" required /></label>}
-        {error && <p className="candidate-error" role="alert">{error}</p>}
+        <label>密码<input name="password" type="password" minLength={12} maxLength={72} autoComplete={action === 'login' ? 'current-password' : 'new-password'} aria-describedby={action === 'register' ? 'candidate-password-hint' : undefined} required />{action === 'register' && <small id="candidate-password-hint" className="candidate-field-hint">至少 12 位</small>}</label>
+        {action === 'register' && <label>确认密码<input name="passwordConfirmation" type="password" minLength={12} maxLength={72} autoComplete="new-password" required /></label>}
+        {error && <p className="candidate-error" role="alert" aria-live="polite">{error}</p>}
         <button className="candidate-main-action" disabled={busy}>{busy ? '正在处理…' : action === 'login' ? '进入个人空间' : '创建并进入'}<ArrowRight size={17}/></button>
       </form>
       <p className="candidate-auth-note"><ShieldCheck size={15}/> 候选人空间与招聘方工作台相互隔离</p>
