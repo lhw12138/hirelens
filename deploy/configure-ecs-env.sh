@@ -15,8 +15,18 @@ printf '\n'
 read -r -s -p "新的 DeepSeek API Key: " model_api_key
 printf '\n'
 
-if [[ -z "$admin_email" || ${#admin_password} -lt 12 || -z "$model_api_key" ]]; then
-  echo "邮箱和模型 Key 不能为空；管理员密码至少12位。" >&2
+password_category_count=0
+[[ "$admin_password" =~ [[:upper:]] ]] && ((password_category_count+=1))
+[[ "$admin_password" =~ [[:lower:]] ]] && ((password_category_count+=1))
+[[ "$admin_password" =~ [[:digit:]] ]] && ((password_category_count+=1))
+[[ "$admin_password" =~ [^[:alnum:][:space:]] ]] && ((password_category_count+=1))
+
+if [[ -z "$admin_email" || -z "$model_api_key" ]]; then
+  echo "邮箱和模型 Key 不能为空。" >&2
+  exit 1
+fi
+if [[ ${#admin_password} -lt 8 || $password_category_count -lt 2 ]]; then
+  echo "管理员密码至少 8 位，且需在大写字母、小写字母、数字和特殊字符中至少使用两类。" >&2
   exit 1
 fi
 

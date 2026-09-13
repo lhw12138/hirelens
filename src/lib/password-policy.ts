@@ -1,7 +1,7 @@
-export const CANDIDATE_PASSWORD_MIN_LENGTH = 8;
+export const ACCOUNT_PASSWORD_MIN_LENGTH = 8;
 
-export function candidatePasswordError(password: string) {
-  if (password.length < CANDIDATE_PASSWORD_MIN_LENGTH) return '密码至少 8 位。';
+export function accountPasswordError(password: string) {
+  if (password.length < ACCOUNT_PASSWORD_MIN_LENGTH) return '密码至少 8 位。';
   const categoryCount = [
     /\p{Lu}/u,
     /\p{Ll}/u,

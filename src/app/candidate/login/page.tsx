@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
-import { candidatePasswordError } from '@/lib/candidate-password';
+import { accountPasswordError } from '@/lib/password-policy';
 
 export default function CandidateLoginPage() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export default function CandidateLoginPage() {
     event.preventDefault(); setBusy(true); setError('');
     const form = new FormData(event.currentTarget);
     const password = String(form.get('password') ?? '');
-    const passwordError = action === 'register' ? candidatePasswordError(password) : null;
+    const passwordError = action === 'register' ? accountPasswordError(password) : null;
     if (passwordError) {
       setError(passwordError);
       setBusy(false);
