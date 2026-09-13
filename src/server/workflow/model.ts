@@ -51,7 +51,9 @@ export async function assessPerson(task: HiringTask, person: Person, phase: 'scr
   if (!model) throw new Error('尚未配置评审模型。配置后重试，资料和回答已保留。');
   const started = Date.now();
   const criteria = phase === 'screening' ? task.criteria : task.evaluationCriteria || task.criteria;
-  const retrieval = await prepareRetrieval(task,person,criteria,phase);
+  // Candidate self-service uses the same retrieval/reranking algorithm without
+  // persisting vectors under transient task IDs that are absent from hiring_tasks.
+  const retrieval = await prepareRetrieval(task,person,criteria,phase,audience !== 'candidate');
   const seen = new Map<string, Source>();
   const audienceInstructions = audience === 'candidate' ? '报告直接面向候选人，summary使用第二人称，明确这是已提交材料的匹配度，不是能力定论、排名或录用概率。' : '';
   const screeningPrompt = audience === 'candidate' ? '这是候选人对自己已提交简历的岗位匹配自测。仅依据简历对每项维度评分或明确证据不足，不输出录用、拒绝或排名建议。' : '这是面试前的简历初筛。仅依据简历对每一项筛选维度评分或明确证据不足，用于HR阅读顺序，不自动淘汰。';
