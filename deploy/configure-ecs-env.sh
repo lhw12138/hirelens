@@ -4,14 +4,21 @@ set -euo pipefail
 cd "$(dirname "$0")"
 umask 077
 
-read -r -p "HireLens 管理员登录邮箱: " admin_email
-read -r -s -p "HireLens 管理员登录密码: " admin_password
+if [[ -e .env.server ]]; then
+  echo "配置已存在，已停止以保护数据库密码与加密密钥。请编辑现有配置，不要重新生成。" >&2
+  exit 1
+fi
+
+read -r -p "MeritTrace 管理员登录邮箱: " admin_email
+read -r -s -p "MeritTrace 管理员登录密码: " admin_password
+printf '\n'
+read -r -s -p "候选人注册邀请码（至少16位）: " candidate_access_code
 printf '\n'
 read -r -s -p "新的 DeepSeek API Key: " model_api_key
 printf '\n'
 
-if [[ -z "$admin_email" || -z "$admin_password" || -z "$model_api_key" ]]; then
-  echo "邮箱、登录密码和模型 Key 均不能为空。" >&2
+if [[ -z "$admin_email" || ${#admin_password} -lt 12 || ${#candidate_access_code} -lt 16 || -z "$model_api_key" ]]; then
+  echo "邮箱和模型 Key 不能为空；管理员密码至少12位，候选人邀请码至少16位。" >&2
   exit 1
 fi
 
@@ -32,6 +39,7 @@ s3_secret_key="$(random_hex)"
   printf 'AUTH_SECRET=%s\n' "$auth_secret"
   printf 'HR_ADMIN_EMAIL=%s\n' "$admin_email"
   printf 'HR_ADMIN_PASSWORD=%s\n' "$admin_password"
+  printf 'CANDIDATE_ACCESS_CODE=%s\n' "$candidate_access_code"
   printf 'DEMO_AUTH_BYPASS=false\n'
   printf 'CANDIDATE_LINK_SECRET=%s\n' "$candidate_secret"
   printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$settings_key"

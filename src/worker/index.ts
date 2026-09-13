@@ -9,7 +9,7 @@ async function handle(type: string, payload: unknown) {
 }
 
 async function run() {
-  console.info("HireLens worker started");
+  console.info("MeritTrace worker started");
   while (true) {
     const job = await claimNextJob();
     if (!job) { await new Promise((resolve) => setTimeout(resolve, 1500)); continue; }
@@ -18,4 +18,3 @@ async function run() {
   }
 }
 run().catch((error) => { console.error(error instanceof Error ? error.message : "worker stopped"); process.exit(1); });
-

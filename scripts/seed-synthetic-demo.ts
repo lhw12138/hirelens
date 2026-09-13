@@ -36,6 +36,11 @@ AI 产品能力
 
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
+  // Validate the fixture before any database or object-storage mutations.
+  const evalRaw = JSON.parse(await readFile(resolve("data/eval-dataset-v1.json"), "utf8")) as {
+    name: string; notice: string; cases: Array<Record<string, unknown>>;
+  };
+  if (!Array.isArray(evalRaw.cases) || !evalRaw.cases.length) throw new Error("Invalid synthetic evaluation dataset");
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
   const s3 = new S3Client({
@@ -49,6 +54,13 @@ async function main() {
 
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(72134001)");
+    const existing = await client.query("select id from organizations where id=$1", [ids.organization]);
+    if (existing.rowCount) {
+      await client.query("rollback");
+      console.log("Synthetic demo already exists; preserved existing scores and review history.");
+      return;
+    }
     await client.query(
       `insert into organizations (id, name) values ($1, $2)
        on conflict (id) do update set name = excluded.name, updated_at = now()`,
@@ -169,9 +181,6 @@ async function main() {
       [ids.assessment, c2Application, JSON.stringify(candidates[1].scores)],
     );
 
-    const evalRaw = JSON.parse(await readFile(resolve("data/eval-dataset-v1.json"), "utf8")) as {
-      name: string; notice: string; cases: Array<Record<string, unknown>>;
-    };
     await client.query(
       `insert into eval_datasets (id,name,version,description,synthetic) values ($1,$2,'1.0.0',$3,true)
        on conflict (id) do update set name=excluded.name,description=excluded.description,synthetic=true,updated_at=now()`,

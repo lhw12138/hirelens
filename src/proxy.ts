@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { verifyHrSession } from "@/lib/session";
+import { verifyHrSession, verifyCandidateSession } from "@/lib/session";
 
 export function isPublicPath(path: string) {
  return path==='/login'||path==='/api/live'||path.startsWith('/respond/')||path.startsWith('/api/respond/')||path.startsWith('/api/auth/')||path.startsWith('/_next/')||path==='/favicon.ico';
@@ -10,6 +10,12 @@ export async function proxy(request:NextRequest){
  if(!['GET','HEAD','OPTIONS'].includes(request.method)) {
    const origin=request.headers.get('origin');
    if(origin && origin!==request.nextUrl.origin)return NextResponse.json({error:'请在当前网站内操作。'},{status:403});
+ }
+ if(path==='/candidate/login'||path==='/api/candidate/auth')return NextResponse.next();
+ if(path==='/candidate'||path.startsWith('/candidate/')||path.startsWith('/api/candidate/')) {
+   const candidateToken=request.cookies.get('merittrace_candidate')?.value;
+   if(!candidateToken||!await verifyCandidateSession(candidateToken).catch(()=>null))return path.startsWith('/api/')?NextResponse.json({error:'请登录候选人账号。'},{status:401}):NextResponse.redirect(new URL('/candidate/login',request.url));
+   return NextResponse.next();
  }
  if(isPublicPath(path))return NextResponse.next();
  const token=request.cookies.get("hirelens_session")?.value;

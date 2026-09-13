@@ -107,5 +107,5 @@ export function comparisonReport(task: HiringTask, stage: ComparisonStage) {
     if (person.review && stage === "combined") lines.push("", `人工决定：${decisionLabel[person.review.decision]}`, `审核意见：${person.review.reason}`);
     lines.push("", `生成信息：${assessment.model} · ${assessment.scoringVersion || "未记录规则版本"} · ${assessment.createdAt}`);
   }
-  return { text: lines.filter((line, index) => line || lines[index - 1] !== "").join("\n"), filename: `HireLens-候选人对比-${cleanName(task.title)}.md` };
+  return { text: lines.filter((line, index) => line || lines[index - 1] !== "").join("\n"), filename: `MeritTrace-候选人对比-${cleanName(task.title)}.md` };
 }

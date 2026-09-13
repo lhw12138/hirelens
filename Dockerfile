@@ -16,6 +16,7 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --chown=nextjs:nodejs package*.json drizzle.config.ts tsconfig.json ./
 COPY --chown=nextjs:nodejs drizzle ./drizzle
+COPY --chown=nextjs:nodejs data/eval-dataset-v1.json ./data/eval-dataset-v1.json
 COPY --chown=nextjs:nodejs scripts ./scripts
 COPY --chown=nextjs:nodejs src ./src
 USER nextjs

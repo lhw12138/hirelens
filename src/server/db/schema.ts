@@ -14,6 +14,23 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import type { HiringTask } from "@/lib/workflow";
+import type { MatchReport } from '@/lib/candidate-match';
+
+// Candidate self-service is deliberately separate from recruitment records.
+export const candidateAccounts = pgTable('candidate_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+export const candidateMatches = pgTable('candidate_matches', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull().references(() => candidateAccounts.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  status: text('status').notNull().default('running'),
+  report: jsonb('report').$type<MatchReport>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('candidate_matches_owner_idx').on(table.ownerId, table.createdAt)]);
 
 export const hiringTasks = pgTable("hiring_tasks", {
   id: uuid("id").defaultRandom().primaryKey(),

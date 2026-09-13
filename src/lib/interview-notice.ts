@@ -31,7 +31,7 @@ export function noticeContent(input: NoticeInput, title: string) {
 const escapeIcs = (value: string) => value.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/;/g, "\\;").replace(/,/g, "\\,");
 const stamp = (value: number) => new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 export function calendarEvent(id: string, email: string, payload: NoticeRecord["payload"], from: string) {
-  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//HireLens//Interview Notice//ZH", "METHOD:REQUEST", "BEGIN:VEVENT", `UID:${id}@hirelens.local`, "SEQUENCE:0", `DTSTAMP:${stamp(Date.now())}`, `DTSTART:${stamp(Date.parse(payload.startsAt))}`, `DTEND:${stamp(Date.parse(payload.startsAt) + payload.durationMinutes * 60_000)}`, `SUMMARY:${escapeIcs(payload.subject)}`, `LOCATION:${escapeIcs(payload.location)}`, `DESCRIPTION:${escapeIcs(payload.text)}`, `ORGANIZER:mailto:${from}`, `ATTENDEE;RSVP=TRUE:mailto:${email}`, "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR"].join("\r\n") + "\r\n";
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MeritTrace//Interview Notice//ZH", "METHOD:REQUEST", "BEGIN:VEVENT", `UID:${id}@hirelens.local`, "SEQUENCE:0", `DTSTAMP:${stamp(Date.now())}`, `DTSTART:${stamp(Date.parse(payload.startsAt))}`, `DTEND:${stamp(Date.parse(payload.startsAt) + payload.durationMinutes * 60_000)}`, `SUMMARY:${escapeIcs(payload.subject)}`, `LOCATION:${escapeIcs(payload.location)}`, `DESCRIPTION:${escapeIcs(payload.text)}`, `ORGANIZER:mailto:${from}`, `ATTENDEE;RSVP=TRUE:mailto:${email}`, "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR"].join("\r\n") + "\r\n";
 }
 
 export const noticeStatusLabel: Record<NoticeStatus, string> = {

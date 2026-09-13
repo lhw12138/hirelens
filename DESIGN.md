@@ -1,4 +1,4 @@
-# HireLens Design System · 任务优先
+# MeritTrace Design System · 任务优先
 
 保留蓝白的工作界面，精简旧版证据矩阵的默认高密度。HR在办公桌前长时间阅读简历，浅色背景与清晰正文优先。
 

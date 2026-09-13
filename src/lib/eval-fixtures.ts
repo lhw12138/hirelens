@@ -31,7 +31,7 @@ const patterns:Pattern[]=[
 ];
 
 const reviewedAt="2026-09-07T12:00:00.000Z";
-export const EVAL_DATASET={name:"HireLens 合成招聘评测集",version:"v1.7.1",notice:"全部为合成案例；证据不足项使用低置信度暂估匹配分，当前标注经过 AI 辅助规则复核和产品负责人盲审流程验证，但尚未经过真实 HR 复核，不代表线上准确率。"} as const;
+export const EVAL_DATASET={name:"MeritTrace 合成招聘评测集",version:"v1.7.1",notice:"全部为合成案例；证据不足项使用低置信度暂估匹配分，当前标注经过 AI 辅助规则复核和产品负责人盲审流程验证，但尚未经过真实 HR 复核，不代表线上准确率。"} as const;
 export function buildSyntheticEvalDataset():EvalCaseFixture[]{
  let index=0;
  return roles.flatMap(role=>patterns.map(pattern=>{index+=1;const id=`eval-${String(index).padStart(3,"0")}`;const ids=[`${id}-s1`,`${id}-s2`],built=pattern.build(role,ids);const criterion=pattern.title==="有明确质量评测闭环"?role.evaluationCriterion:pattern.title==="相邻领域经验可迁移"?role.transferCriterion:pattern.title==="协作能力相关但业务场景不同"?role.collaborationCriterion:role.criterion;return {id,synthetic:true,role:role.role,title:pattern.title,scenario:pattern.scenario,criterion,jd:role.jd,...built,expected:{...built.expected,reviewedAt,reviewSource:"ai_assisted" as const,reviewNote:"依据单一明确维度复核：只按当前维度判断；简洁但具体的行动仍是证据；相邻经验可迁移但不等同直接经验；资料缺失、来源冲突与身份属性分别处理。"}};}));

@@ -72,6 +72,7 @@ services:
     # also include the file directly.
     volumes:
       - ../tsconfig.json:/app/tsconfig.json:ro
+      - ../data/eval-dataset-v1.json:/app/data/eval-dataset-v1.json:ro
     depends_on:
       postgres: { condition: service_healthy }
       minio-init: { condition: service_completed_successfully }

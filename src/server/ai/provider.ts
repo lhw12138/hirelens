@@ -21,7 +21,6 @@ export function modelConfig(purpose: ModelPurpose) {
 export function getLanguageModel(purpose: ModelPurpose) {
   const config = modelConfig(purpose);
   if (!config.apiKey) return null;
-  const provider = createOpenAI({ apiKey: config.apiKey, baseURL: config.baseURL, name: "hirelens-model" });
+  const provider = createOpenAI({ apiKey: config.apiKey, baseURL: config.baseURL, name: "merittrace-model" });
   return provider.chat(config.id);
 }
-

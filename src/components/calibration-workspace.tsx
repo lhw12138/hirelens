@@ -128,7 +128,7 @@ export function CalibrationWorkspace() {
           <div className="process-rail">
             {stageRail.map((stage, index) => <div key={stage} className={index < 4 ? "complete" : "current"}><span>{index < 4 ? <Check size={13} /> : index + 1}</span><strong>{stage}</strong><small>{index < 4 ? "已完成" : confirmed ? "已确认" : "当前节点"}</small></div>)}
           </div>
-          <div className="trace-strip"><span><Sparkles size={14} /> HireLens-Judge v2.3.1</span><span>Skill Pack · Finance-PM v1.4.0</span><span>检索 P95 · 287ms</span><span>本次估算 · ¥0.148</span></div>
+          <div className="trace-strip"><span><Sparkles size={14} /> MeritTrace-Judge v2.3.1</span><span>Skill Pack · Finance-PM v1.4.0</span><span>检索 P95 · 287ms</span><span>本次估算 · ¥0.148</span></div>
         </section>
 
         <aside className="evidence-inspector" aria-label="证据核查">
