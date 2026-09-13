@@ -24,7 +24,15 @@ export function candidateFailure(error: unknown) {
   if (error instanceof WorkflowError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof z.ZodError) return NextResponse.json({ error: '请检查输入长度、邮箱格式和确认选项。' }, { status: 400 });
   const incident = crypto.randomUUID();
-  console.error('candidate_request_failed', incident);
+  const detail = error instanceof Error
+    ? redactPersonalData(`${error.name}: ${error.message}`)
+      .text
+      .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+      .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gi, '[redacted-api-key]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 500)
+    : 'Unknown non-Error failure';
+  console.error('candidate_request_failed', incident, detail);
   return NextResponse.json({ error: '处理未完成，请稍后重试。若持续失败，请联系管理员。', incident }, { status: 503 });
 }
 export async function readCandidateJson(request: Request) {

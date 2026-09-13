@@ -1,5 +1,6 @@
 import "server-only";
 import { createOpenAI } from "@ai-sdk/openai";
+import { withDeepSeekNonThinking } from "@/lib/deepseek-request";
 
 export type ModelPurpose = "conversation" | "interview" | "review";
 
@@ -21,6 +22,12 @@ export function modelConfig(purpose: ModelPurpose) {
 export function getLanguageModel(purpose: ModelPurpose) {
   const config = modelConfig(purpose);
   if (!config.apiKey) return null;
-  const provider = createOpenAI({ apiKey: config.apiKey, baseURL: config.baseURL, name: "merittrace-model" });
+  const isDeepSeek = /^https:\/\/api\.deepseek\.com(?:\/|$)/i.test(config.baseURL);
+  const provider = createOpenAI({
+    apiKey: config.apiKey,
+    baseURL: config.baseURL,
+    name: "merittrace-model",
+    fetch: isDeepSeek ? withDeepSeekNonThinking : undefined,
+  });
   return provider.chat(config.id);
 }
