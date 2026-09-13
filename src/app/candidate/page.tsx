@@ -1,4 +1,5 @@
 "use client";
+import './candidate-status.css';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, CheckCircle2, FileText, LogOut, ShieldCheck, Trash2, Upload } from 'lucide-react';
@@ -30,9 +31,9 @@ export default function CandidatePage() {
   return <main className="candidate-space">
     <header className="candidate-space-header"><div className="merit-wordmark"><span>MT</span><strong>MeritTrace</strong><small>候选人材料自测</small></div><button className="candidate-text-button" onClick={logout}><LogOut size={16}/>退出</button></header>
     <div className="candidate-workbench">
-      <aside className="candidate-history"><h2>你的报告</h2><button className="new-match" onClick={() => setActive(null)}>＋ 新建匹配分析</button>{records.length ? records.map(record => <button key={record.id} className={active?.id === record.id ? 'history-row active' : 'history-row'} onClick={() => setActive(record)}><span>{record.title || '已删除'}</span><small>{record.status === 'complete' ? new Date(record.createdAt).toLocaleDateString('zh-CN') : '分析未完成'}</small></button>) : <p className="history-empty">完成第一份分析后，报告会出现在这里。</p>}</aside>
+      <aside className="candidate-history"><h2>你的报告</h2><button className="new-match" onClick={() => { setActive(null); setError(''); }}>＋ 新建匹配分析</button>{records.length ? records.map(record => <button key={record.id} className={active?.id === record.id ? 'history-row active' : 'history-row'} aria-current={active?.id === record.id ? 'page' : undefined} onClick={() => { setActive(record); setError(''); }}><span>{record.title || '已删除'}</span><small>{record.status === 'complete' ? new Date(record.createdAt).toLocaleDateString('zh-CN') : record.status === 'running' ? '分析进行中' : '分析未完成'}</small></button>) : <p className="history-empty">完成第一份分析后，报告会出现在这里。</p>}</aside>
       <section className="candidate-main">
-        {active?.report ? <MatchReportView report={active.report} title={active.title} onBack={() => setActive(null)} onDelete={() => remove(active.id)} /> : <>
+        {active?.report ? <MatchReportView report={active.report} title={active.title} onBack={() => setActive(null)} onDelete={() => remove(active.id)} /> : active ? <IncompleteMatchView record={active} onNew={() => setActive(null)} onDelete={() => remove(active.id)} /> : <>
           <div className="candidate-intro"><div><h1>简历 × JD 匹配分析</h1><p>它衡量的是“你当前写出来的证据”与岗位要求的贴合程度，不代表真实能力或录用概率。</p></div><span><ShieldCheck size={16}/>仅本人可见</span></div>
           <form className="match-form" onSubmit={analyze}>
             <label>目标岗位名称<input value={title} onChange={e => setTitle(e.target.value)} minLength={2} maxLength={100} placeholder="例如：AI 产品经理" required /></label>
@@ -47,6 +48,17 @@ export default function CandidatePage() {
       </section>
     </div>
   </main>;
+}
+
+function IncompleteMatchView({ record, onNew, onDelete }: { record: MatchRecord; onNew: () => void; onDelete: () => void }) {
+  const running = record.status === 'running';
+  return <section className="incomplete-match" aria-labelledby="incomplete-title">
+    <span className="incomplete-match-icon" aria-hidden="true">{running ? '…' : '!'}</span>
+    <p className="incomplete-match-status">{running ? '分析进行中' : '未生成报告'}</p>
+    <h1 id="incomplete-title">{record.title}</h1>
+    <p>{running ? '服务正在处理这份材料。请稍后刷新页面查看结果。' : '这次分析没有完成，因此没有可展示的评分。为保护隐私，未成功的输入材料不会作为历史报告保存。'}</p>
+    <div><button className="candidate-main-action" onClick={onNew}>{running ? '新建另一份分析' : '重新开始分析'}<ArrowRight size={17}/></button><button className="candidate-text-button danger" onClick={onDelete}><Trash2 size={16}/>删除记录</button></div>
+  </section>;
 }
 
 function MatchReportView({ report, title, onBack, onDelete }: { report: MatchReport; title: string; onBack: () => void; onDelete: () => void }) {

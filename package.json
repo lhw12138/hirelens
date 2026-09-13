@@ -21,6 +21,7 @@
     "demo:upgrade:gates": "node --env-file=.env --conditions=react-server --import tsx scripts/upgrade-hard-requirements.ts",
     "demo:verify": "node --env-file=.env --import tsx scripts/verify-synthetic-demo.ts",
     "benchmark:recruitment": "node --env-file=.env --conditions=react-server --import tsx scripts/verify-recruitment-benchmark.ts",
+    "smoke:candidate": "node --conditions=react-server --import tsx scripts/smoke-candidate-match.ts",
     "privacy:cleanup": "node --env-file=.env --conditions=react-server --import tsx scripts/cleanup-retention.ts",
     "deploy:verify": "node scripts/verify-deployment.mjs",
     "worker": "tsx src/worker/index.ts",

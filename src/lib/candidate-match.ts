@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { chunkDocument } from './chunking';
 import { redactPersonalData } from './redaction';
-import { criterionSchema, draftSchema, validateAssessment, validateCriteria, type Source } from './workflow';
+import { criterionSchema, draftSchema, validateAssessment, validateCriteria, type Assessment, type Criterion, type Source } from './workflow';
 
 export const matchInputSchema = z.object({
   requestId: z.uuid(),
@@ -29,8 +29,24 @@ export function prepareMatchInput(input: unknown) {
   return { ...parsed, title: redactPersonalData(parsed.title).text, jd: redactPersonalData(parsed.jd).text, resume: redactPersonalData(parsed.resume).text };
 }
 export function resumeSources(resume: string): Source[] {
-  return chunkDocument([{ section: '已确认简历', text: resume }], 1000, 0)
-    .map((chunk, i) => ({ id: `resume-${i + 1}`, kind: 'resume', locator: `简历片段 ${i + 1}`, text: chunk.text }));
+  return chunkDocument(resume.split(/\n{2,}/).map((text, i) => ({ section: `确认稿段落 ${i + 1}`, text })))
+    .map((chunk, i) => ({ id: `resume-${i + 1}`, kind: 'resume', locator: `${chunk.section} · 字符 ${chunk.start + 1}–${chunk.end}`, text: chunk.text }));
+}
+
+export function candidateImprovements(criteria: Criterion[], assessment: Pick<Assessment, 'scores'>) {
+  return criteria.map(criterion => {
+    const score = assessment.scores.find(item => item.criterionId === criterion.id);
+    const action = score?.status === 'conflict'
+      ? '核对并统一时间、职责或成果描述，保留可核验的原始依据'
+      : score?.status === 'supported'
+        ? '保留现有直接证据，并补充你的具体行动、关键取舍和结果验证'
+        : '补充与该要求直接相关的真实项目、个人行动和可核验结果；若暂无经历，请如实说明学习或实践计划';
+    return { criterionId: criterion.id, suggestion: `${criterion.name}：${action}。` };
+  });
+}
+
+export function buildCandidateMatchReport(criteria: Criterion[], assessment: Assessment, sources: Source[]) {
+  return validateMatchReport({ criteria, assessment, improvements: candidateImprovements(criteria, assessment) }, sources, assessment.model);
 }
 export function validateMatchReport(value: unknown, sources: Source[], model: string): MatchReport {
   const result = matchOutputSchema.parse(value);
