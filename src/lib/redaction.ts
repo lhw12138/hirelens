@@ -13,7 +13,7 @@ const rules = [
   { type: "phone" as const, pattern: /(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)/g, replacement: "[手机号已脱敏]" },
   { type: "email" as const, pattern: EMAIL_PATTERN, replacement: "[邮箱已脱敏]" },
   { type: "id" as const, pattern: /(?<!\d)\d{6}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[0-9Xx](?!\d)/g, replacement: "[证件号已脱敏]" },
-  { type: "address" as const, pattern: /(?:现居住?地|住址|地址)\s*[：:]\s*[^\n]{4,40}/g, replacement: "地址：[详细地址已脱敏]" },
+  { type: "address" as const, pattern: /(?:现居住?地|住址|地址)\s*[：:]\s*(?!\[详细地址已脱敏\])[^\n]{4,40}/g, replacement: "地址：[详细地址已脱敏]" },
 ];
 
 export function redactPersonalData(input: string): RedactionResult {

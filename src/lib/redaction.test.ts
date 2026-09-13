@@ -15,6 +15,13 @@ describe("redactPersonalData", () => {
     expect(() => assertSafeForTracing({ candidateId: "c-001" })).not.toThrow();
   });
 
+  it("treats an already-redacted address as safe", () => {
+    const redacted = redactPersonalData("现居地：北京市海淀区\n产品经理").text;
+    expect(redacted).toContain("地址：[详细地址已脱敏]");
+    expect(redactPersonalData(redacted).findings).toEqual([]);
+    expect(() => assertSafeForTracing({ resume: redacted })).not.toThrow();
+  });
+
   it("extracts unique candidate emails before redaction", () => {
     expect(extractEmailAddresses("联系 LI@Example.com，备用 li@example.com 或 hr@example.cn")).toEqual(["li@example.com", "hr@example.cn"]);
   });
