@@ -84,6 +84,7 @@ services:
     restart: unless-stopped
     env_file: .env.server
     environment:
+      APP_ORIGIN: ${APP_ORIGIN:-https://merittrace.cyou}
       DATABASE_URL: postgres://hirelens:${POSTGRES_PASSWORD}@postgres:5432/hirelens
       S3_ENDPOINT: http://minio:9000
       RAG_LOCAL_URL: http://embeddings:3041

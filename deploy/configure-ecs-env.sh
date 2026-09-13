@@ -45,6 +45,7 @@ s3_secret_key="$(random_hex)"
   printf 'DATABASE_URL=postgres://hirelens:%s@postgres:5432/hirelens\n' "$postgres_password"
   printf '\n'
   printf 'AUTH_SECRET=%s\n' "$auth_secret"
+  printf 'APP_ORIGIN=https://merittrace.cyou\n'
   printf 'HR_ADMIN_EMAIL=%s\n' "$admin_email"
   printf 'HR_ADMIN_PASSWORD=%s\n' "$admin_password"
   printf 'DEMO_AUTH_BYPASS=false\n'

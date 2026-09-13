@@ -5,11 +5,18 @@ export function isPublicPath(path: string) {
  return path==='/login'||path==='/api/live'||path.startsWith('/respond/')||path.startsWith('/api/respond/')||path.startsWith('/api/auth/')||path.startsWith('/_next/')||path==='/favicon.ico';
 }
 
+export function isAllowedOrigin(origin: string | null, requestOrigin: string, configuredOrigin?: string) {
+ if(!origin)return true;
+ const normalize=(value:string|undefined)=>{try{return value?new URL(value).origin:null;}catch{return null;}};
+ const received=normalize(origin);
+ return received!==null&&[normalize(requestOrigin),normalize(configuredOrigin)].includes(received);
+}
+
 export async function proxy(request:NextRequest){
  const path=request.nextUrl.pathname;
  if(!['GET','HEAD','OPTIONS'].includes(request.method)) {
    const origin=request.headers.get('origin');
-   if(origin && origin!==request.nextUrl.origin)return NextResponse.json({error:'请在当前网站内操作。'},{status:403});
+   if(!isAllowedOrigin(origin,request.nextUrl.origin,process.env.APP_ORIGIN))return NextResponse.json({error:'请在当前网站内操作。'},{status:403});
  }
  if(path==='/candidate/login'||path==='/api/candidate/auth')return NextResponse.next();
  if(path==='/candidate'||path.startsWith('/candidate/')||path.startsWith('/api/candidate/')) {
