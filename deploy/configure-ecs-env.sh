@@ -54,9 +54,9 @@ s3_secret_key="$(random_hex)"
   printf '\n'
   printf 'MODEL_BASE_URL=https://api.deepseek.com\n'
   printf 'MODEL_API_KEY=%s\n' "$model_api_key"
-  printf 'MODEL_CONVERSATION=deepseek-v4-flash\n'
-  printf 'MODEL_INTERVIEW=deepseek-v4-flash\n'
-  printf 'MODEL_REVIEW=deepseek-v4-flash\n'
+  printf 'MODEL_CONVERSATION=deepseek-flash\n'
+  printf 'MODEL_INTERVIEW=deepseek-flash\n'
+  printf 'MODEL_REVIEW=deepseek-flash\n'
   printf '\n'
   printf 'EMBEDDING_MODEL=intfloat/multilingual-e5-small\n'
   printf 'RERANK_MODEL=local-cosine\n'

@@ -10,7 +10,7 @@ describe('withDeepSeekNonThinking', () => {
 
     await withDeepSeekNonThinking('https://api.deepseek.com/chat/completions', {
       method: 'POST',
-      body: JSON.stringify({ model: 'deepseek-v4-flash', messages: [] }),
+      body: JSON.stringify({ model: 'deepseek-flash', messages: [] }),
     });
 
     const sent = JSON.parse(fetchMock.mock.calls[0][1].body as string);
@@ -20,7 +20,7 @@ describe('withDeepSeekNonThinking', () => {
   it('does not alter requests that already choose a thinking mode', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
     vi.stubGlobal('fetch', fetchMock);
-    const body = JSON.stringify({ model: 'deepseek-v4-flash', thinking: { type: 'enabled' } });
+    const body = JSON.stringify({ model: 'deepseek-flash', thinking: { type: 'enabled' } });
 
     await withDeepSeekNonThinking('https://api.deepseek.com/chat/completions', { method: 'POST', body });
 
