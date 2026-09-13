@@ -48,6 +48,7 @@ s3_secret_key="$(random_hex)"
   printf 'APP_ORIGIN=https://merittrace.cyou\n'
   printf 'HR_ADMIN_EMAIL=%s\n' "$admin_email"
   printf 'HR_ADMIN_PASSWORD=%s\n' "$admin_password"
+  printf 'HR_DAILY_AI_LIMIT=50\n'
   printf 'DEMO_AUTH_BYPASS=false\n'
   printf 'CANDIDATE_LINK_SECRET=%s\n' "$candidate_secret"
   printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$settings_key"

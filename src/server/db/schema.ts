@@ -23,6 +23,17 @@ export const candidateAccounts = pgTable('candidate_accounts', {
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+export const hrAccounts = pgTable('hr_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+export const hrAiUsageDaily = pgTable('hr_ai_usage_daily', {
+  ownerEmail: text('owner_email').notNull().references(() => hrAccounts.email, { onDelete: 'cascade' }),
+  usageDate: text('usage_date').notNull(),
+  operations: integer('operations').default(0).notNull(),
+}, table => [primaryKey({ name: 'hr_ai_usage_daily_pkey', columns: [table.ownerEmail, table.usageDate] })]);
 export const candidateMatches = pgTable('candidate_matches', {
   id: uuid('id').primaryKey(),
   ownerId: uuid('owner_id').notNull().references(() => candidateAccounts.id, { onDelete: 'cascade' }),

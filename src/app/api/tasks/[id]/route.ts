@@ -11,6 +11,7 @@ import { chunkDocument } from '@/lib/chunking';
 import { objectStore } from '@/server/storage/object-store';
 import { failure } from '../route';
 import { archiveTask, restoreTask, taskIsArchived } from '@/lib/data-lifecycle';
+import {consumeHrAiUsage} from '@/server/auth/hr-usage';
 const mutationSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('batch'), entries: z.array(z.object({ name: z.string().trim().min(1).max(60), resume: z.string().trim().min(30).max(30000), filename: z.string().max(200), contactToken: z.string().max(5000).optional() })).min(1).max(10) }),
   z.object({ action: z.literal('rubric'), criteria: z.array(criterionSchema) }),
@@ -58,6 +59,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       task.title = input.title;
       task.jd = redactPersonalData(input.jd).text;
       if (input.action === 'parse') {
+        await consumeHrAiUsage(owner);
         task.criteria = await parseJob(task.jd);
         action = 'AI 整理招聘要求，等待人工确认';
       } else {
@@ -92,6 +94,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         if (!person.resumeConfirmed) throw new WorkflowError('请先确认脱敏资料。');
         if (input.action === 'screen' && person.screening) throw new WorkflowError('简历已评分，请查看结果。',409);
         if (input.action === 'rescreen' && (!person.screening || (person.screening.scoringVersion === SCREENING_POLICY && (person.screening.retrieval?.mode === 'hybrid' || process.env.RAG_MODE === 'keyword')) || person.shortlisted || person.assessment)) throw new WorkflowError('只有尚未进入面试的旧版初筛可以按新规则重评；已进入后续流程的记录保持不变。',409);
+        await consumeHrAiUsage(owner);
         task.scoringJob={id:crypto.randomUUID(),candidateId:person.id,action:input.action,status:'queued',queuedAt:new Date().toISOString()};
         action='已提交后台简历评分';
       } else if (input.action === 'shortlist') {
@@ -132,6 +135,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         if (input.action === 'assess' && person.assessment) throw new WorkflowError('评估已生成，请直接审核。', 409);
         if (input.action === 'reassess' && (!person.assessment || person.assessment.scoringVersion === COMBINED_POLICY)) throw new WorkflowError('当前评估已经使用最新综合评估规则。', 409);
         if(!person.shortlisted||!person.resumeConfirmed)throw new WorkflowError('请先完成简历筛选。');
+        await consumeHrAiUsage(owner);
         task.scoringJob={id:crypto.randomUUID(),candidateId:person.id,action:input.action,status:'queued',queuedAt:new Date().toISOString()};action=input.action==='reassess'?'已按暂估分新规则重新提交综合评估':'已提交后台综合评估';
       } else if (input.action === 'review') {
         try { validateReview(person, input); } catch(e) { throw new WorkflowError((e as Error).message); }

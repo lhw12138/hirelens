@@ -11,8 +11,9 @@ export class WorkflowError extends Error {
 }
 export async function requireOwner() {
   const cookie = (await cookies()).get('hirelens_session')?.value;
-  if (!cookie || !(await verifyHrSession(cookie).catch(() => false))) throw new WorkflowError('登录已过期，请重新登录。', 401);
-  return process.env.HR_ADMIN_EMAIL || 'admin@hirelens.local';
+  const account = cookie ? await verifyHrSession(cookie).catch(() => null) : null;
+  if (!account) throw new WorkflowError('登录已过期，请重新登录。', 401);
+  return account.email;
 }
 export async function listTasks(owner: string, deleted=false) {
   return getDatabase().select().from(hiringTasks).where(and(eq(hiringTasks.ownerEmail, owner), deleted ? sql`COALESCE(${hiringTasks.data}->>'archivedAt',${hiringTasks.data}->>'deletedAt') IS NOT NULL` : sql`COALESCE(${hiringTasks.data}->>'archivedAt',${hiringTasks.data}->>'deletedAt') IS NULL`)).orderBy(desc(hiringTasks.updatedAt));
