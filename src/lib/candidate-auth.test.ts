@@ -6,21 +6,42 @@ describe('candidate credentials', () => {
     const credentials = candidateCredentials.parse({
       action: 'register',
       email: ' Candidate@Example.com ',
-      password: 'strong-password',
+      password: 'Merit2026',
     });
 
     expect(credentials).toEqual({
       action: 'register',
       email: 'candidate@example.com',
-      password: 'strong-password',
+      password: 'Merit2026',
     });
   });
 
-  it('keeps the minimum password length requirement', () => {
+  it('requires at least eight characters', () => {
     expect(candidateCredentials.safeParse({
       action: 'register',
       email: 'candidate@example.com',
-      password: 'too-short',
+      password: 'Abc123',
     }).success).toBe(false);
+  });
+
+  it('requires two of uppercase, lowercase, number, and special character', () => {
+    expect(candidateCredentials.safeParse({
+      action: 'register',
+      email: 'candidate@example.com',
+      password: 'lowercaseonly',
+    }).success).toBe(false);
+    expect(candidateCredentials.safeParse({
+      action: 'register',
+      email: 'candidate@example.com',
+      password: 'lowercase!',
+    }).success).toBe(true);
+  });
+
+  it('does not apply new registration complexity rules to existing account logins', () => {
+    expect(candidateCredentials.safeParse({
+      action: 'login',
+      email: 'candidate@example.com',
+      password: 'aaaaaaaaaaaa',
+    }).success).toBe(true);
   });
 });

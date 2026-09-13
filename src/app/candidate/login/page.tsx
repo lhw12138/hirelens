@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { candidatePasswordError } from '@/lib/candidate-password';
 
 export default function CandidateLoginPage() {
   const router = useRouter();
@@ -13,6 +14,12 @@ export default function CandidateLoginPage() {
     event.preventDefault(); setBusy(true); setError('');
     const form = new FormData(event.currentTarget);
     const password = String(form.get('password') ?? '');
+    const passwordError = action === 'register' ? candidatePasswordError(password) : null;
+    if (passwordError) {
+      setError(passwordError);
+      setBusy(false);
+      return;
+    }
     if (action === 'register' && password !== form.get('passwordConfirmation')) {
       setError('两次输入的密码不一致，请核对后再试。');
       setBusy(false);
@@ -38,8 +45,8 @@ export default function CandidateLoginPage() {
       <h2 id="auth-title">{action === 'login' ? '继续你的材料自测' : '创建候选人账号'}</h2>
       <form onSubmit={submit}>
         <label>邮箱<input name="email" type="email" autoComplete="email" required /></label>
-        <label>密码<input name="password" type="password" minLength={12} maxLength={72} autoComplete={action === 'login' ? 'current-password' : 'new-password'} aria-describedby={action === 'register' ? 'candidate-password-hint' : undefined} required />{action === 'register' && <small id="candidate-password-hint" className="candidate-field-hint">至少 12 位</small>}</label>
-        {action === 'register' && <label>确认密码<input name="passwordConfirmation" type="password" minLength={12} maxLength={72} autoComplete="new-password" required /></label>}
+        <label>密码<input name="password" type="password" minLength={action === 'register' ? 8 : 1} maxLength={72} autoComplete={action === 'login' ? 'current-password' : 'new-password'} aria-describedby={action === 'register' ? 'candidate-password-hint' : undefined} required />{action === 'register' && <small id="candidate-password-hint" className="candidate-field-hint">至少 8 位；大小写字母、数字、特殊字符任选两类</small>}</label>
+        {action === 'register' && <label>确认密码<input name="passwordConfirmation" type="password" minLength={8} maxLength={72} autoComplete="new-password" required /></label>}
         {error && <p className="candidate-error" role="alert" aria-live="polite">{error}</p>}
         <button className="candidate-main-action" disabled={busy}>{busy ? '正在处理…' : action === 'login' ? '进入个人空间' : '创建并进入'}<ArrowRight size={17}/></button>
       </form>
