@@ -1,4 +1,5 @@
 import type { HiringTask } from "@/lib/workflow";
+import { scoringActive, scoringJobs, updateScoringJob } from "@/lib/scoring-job";
 
 export type RetentionDays = 30 | 90 | null;
 
@@ -17,7 +18,7 @@ export function archiveTask(task: HiringTask, now = new Date()) {
   task.archivedAt = archivedAt;
   delete task.deletedAt;
   task.purgeAfter = task.retentionDays == null ? undefined : new Date(now.getTime() + task.retentionDays * 86_400_000).toISOString();
-  if (task.scoringJob?.status === "queued" || task.scoringJob?.status === "running") task.scoringJob = { ...task.scoringJob, status: "cancelled", finishedAt: archivedAt };
+  for (const job of scoringJobs(task)) if (scoringActive(job)) updateScoringJob(task, { ...job, status: "cancelled", finishedAt: archivedAt });
   return task;
 }
 

@@ -1,22 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
-import {scoringActive,scoringLabel} from "@/lib/scoring-job";
+import {activeScoringJobs,candidateScoringJob,latestScoringJob,scoringLabel} from "@/lib/scoring-job";
 import Link from "next/link";
 import { InterviewNoticePanel } from "@/components/interview-notice-panel";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Download, FileUp, Link2Off, LoaderCircle, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react";
 import { COMBINED_POLICY, SCREENING_POLICY, currentStep, screeningValue, steps, sampleAnswers, sampleResume, type TaskRecord, type Person, type Criterion, type Assessment } from "@/lib/workflow";
 import type { ScoringJob } from "@/lib/scoring-job";
 import { hardRequirementLabel, hardRequirementResult } from "@/lib/candidate-comparison";
+import { addCriterion, copyCriteria, createManualCriteria, MAX_CRITERIA, MIN_CRITERIA } from "@/lib/criteria-editor";
 
 function rememberCandidate(person?:Person){if(!person)return;const url=new URL(window.location.href);url.searchParams.set("candidate",person.id);window.history.replaceState(null,"",url);}
 function restoredPerson(people:Person[]){const id=new URL(window.location.href).searchParams.get("candidate");return people.find(p=>p.id===id)||people.find(p=>!p.review)||people[0];}
 
-function ScoringProgress({job}:{job:ScoringJob}){
+function ScoringProgress({jobs,people}:{jobs:ScoringJob[];people:Person[]}){
   const [seconds,setSeconds]=useState(0);
   useEffect(()=>{const timer=setInterval(()=>setSeconds(value=>value+1),1000);return()=>clearInterval(timer);},[]);
-  const queued=job.status==="queued";const slow=queued?seconds>=20:seconds>=90;
-  const title=queued?"评分已提交，正在等待后台接单":job.action==="assess"||job.action==="reassess"?"正在检索简历和面试证据":"正在检索简历证据并生成评分";
-  const detail=slow?(queued?"等待时间较长，后台服务可能繁忙或尚未启动。请点“重新读取进度”；资料不会丢失。":"模型响应比通常更慢，系统仍在后台处理；10分钟超时后会保留资料并允许重试。"):`已等待 ${seconds} 秒 · ${queued?"通常几秒内开始":"通常需要30–90秒"}，可以离开本页面。`;
+  const running=jobs.find(job=>job.status==="running");const slow=running?seconds>=90:seconds>=20;
+  const title=jobs.length>1?`${jobs.length} 项候选人评分正在处理`:running?(running.action==="assess"||running.action==="reassess"?"正在检索简历和面试证据":"正在检索简历证据并生成评分"):"评分已提交，正在等待后台接单";
+  const queue=jobs.map(job=>`${people.find(person=>person.id===job.candidateId)?.name||"候选人"}：${job.status==="running"?"评分中":"排队中"}`).join("；");
+  const detail=slow?(running?"模型响应比通常更慢，系统仍在后台处理；你可以继续确认或提交其他候选人。":"等待时间较长，后台服务可能繁忙；资料不会丢失。"):`${queue} · 已等待 ${seconds} 秒；可继续处理其他候选人。`;
   return <section className={`hl-scoring-progress${slow?" is-slow":""}`} role="status" aria-live="polite"><LoaderCircle size={20}/><div><strong>{title}</strong><p>{detail}</p></div><span className="hl-progress-track" aria-hidden="true"><i/></span></section>;
 }
 
@@ -38,16 +40,16 @@ export function GuidedTask({ id }: { id: string }) {
   const [rubricDirty,setRubricDirty]=useState(false);
   async function load(){try{const r=await fetch("/api/tasks/"+id);const data=await r.json();if(!r.ok)throw new Error(data.error);setRow(data);const p=restoredPerson(data.data.candidates);rememberCandidate(p);setSelected(p?.id||"");setStep(currentStep(data.data,p));setError("");}catch(e){setError((e as Error).message);}}
   useEffect(()=>{const controller=new AbortController();fetch("/api/tasks/"+id,{signal:controller.signal}).then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error);setRow(data);const p=restoredPerson(data.data.candidates);rememberCandidate(p);setSelected(p?.id||"");setStep(currentStep(data.data,p));}).catch(e=>{if(e.name!=="AbortError")setError(e.message);});return()=>controller.abort();},[id]);
-  const background=scoringActive(row?.data.scoringJob);
+  const activeJobs=activeScoringJobs(row?.data);const background=activeJobs.length>0;
   useEffect(()=>{
     if(!background)return;
     const controller=new AbortController();
     const timer=setInterval(()=>{fetch("/api/tasks/"+id,{signal:controller.signal}).then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error);setRow(data);}).catch(e=>{if(e.name!=="AbortError")setError("暂时无法读取后台进度，请重新读取。评分不会因离开页面而取消。");});},2500);
     return()=>{controller.abort();clearInterval(timer);};
   },[id,background]);
-  const person=adding?undefined:row?.data.candidates.find(p=>p.id===selected);
+  const person=adding?undefined:row?.data.candidates.find(p=>p.id===selected);const selectedJob=candidateScoringJob(row?.data,person?.id);const lastJob=latestScoringJob(row?.data);
   const act:Act=async(input,label)=>{
-    if(!row||busy||background)return;
+    if(!row||busy)return;
     setBusy(label);setError("");setNotice("");
     try{
       const r=await fetch("/api/tasks/"+id,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,version:row.version})});
@@ -60,7 +62,7 @@ export function GuidedTask({ id }: { id: string }) {
     }catch(e){setError((e as Error).message);}finally{setBusy("");}
   };
   const lifecycle:LifecycleAct=async(input,label)=>{
-    if(!row||busy||background)return;setBusy(label);setError("");setNotice("");
+    if(!row||busy||selectedJob)return;setBusy(label);setError("");setNotice("");
     try{const r=await fetch(`/api/tasks/${id}/lifecycle`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,version:row.version})});const data=await r.json();if(!r.ok)throw Error(data.error);setRow(data);const next=data.data.candidates.find((candidate:Person)=>candidate.id===selected)||data.data.candidates[0];rememberCandidate(next);setSelected(next?.id||"");setAdding(!next);if(next)setStep(currentStep(data.data,next));setNotice(input.action==="deleteCandidate"?"候选人及全部关联资料已永久删除。":input.action==="revokeInvitation"?"候选人访问链接已撤销。":"数据保留期限已更新。");}
     catch(e){setError((e as Error).message);}finally{setBusy("");}
   };
@@ -72,18 +74,18 @@ export function GuidedTask({ id }: { id: string }) {
       <div className="hl-task-heading-actions">{task.candidates.length>1&&<Link className="hl-secondary" href={`/tasks/${id}/compare`}><Users size={16}/>比较候选人</Link>}{task.candidates.length>0&&<label className="hl-switch">切换候选人<select aria-label="切换候选人" disabled={!!busy} value={adding?"":selected} onChange={e=>{rememberCandidate(task.candidates.find(p=>p.id===e.target.value));setRubricDirty(false);setSelected(e.target.value);setAdding(false);setStep(currentStep(task,task.candidates.find(p=>p.id===e.target.value)));setError("");}}>{adding&&<option value="">添加新候选人</option>}{task.candidates.map(p=><option value={p.id} key={p.id}>{p.name}{p.review?" · 已确认":""}</option>)}</select></label>}</div>
     </div>
     <nav className="hl-steps" aria-label="招聘步骤">{steps.map((label,i)=><button key={label} aria-current={i===step?"step":undefined} disabled={i>available||!!busy} onClick={()=>{setRubricDirty(false);setStep(i);setError("");setNotice("");}}><span>{i<available?<Check size={16}/>:i+1}</span><strong>{label}</strong></button>)}</nav>
-    {background&&row.data.scoringJob&&<ScoringProgress key={row.data.scoringJob.id+row.data.scoringJob.status} job={row.data.scoringJob}/>} 
-    <div aria-live="polite" className="hl-feedback">{row.data.scoringJob?.status==="failed"&&!background?<div className="hl-scoring-failure" role="alert"><AlertTriangle size={18}/><div><strong>{scoringLabel(row.data.scoringJob)}</strong><p>{row.data.scoringJob.error||"候选人资料已保留，可以重新评分。"}</p><small>错误代码：{row.data.scoringJob.errorCode||"MODEL_FAILED"}</small></div><Link href="/health" className="hl-quiet">检查系统状态</Link></div>:row.data.scoringJob&&!background?<p role="status">{scoringLabel(row.data.scoringJob)}</p>:null}{busy?<p role="status">{busy} {busy.includes("评估")&&"提交后可离开页面，结果会自动保存。"}</p>:notice?<p>{notice}</p>:null}</div>
+    {background&&<ScoringProgress key={activeJobs.map(job=>job.id+job.status).join("-")} jobs={activeJobs} people={task.candidates}/>}
+    <div aria-live="polite" className="hl-feedback">{lastJob?.status==="failed"?<div className="hl-scoring-failure" role="alert"><AlertTriangle size={18}/><div><strong>{scoringLabel(lastJob)}</strong><p>{lastJob.error||"候选人资料已保留，可以重新评分。"}</p><small>错误代码：{lastJob.errorCode||"MODEL_FAILED"}</small></div><Link href="/health" className="hl-quiet">检查系统状态</Link></div>:lastJob&&!background?<p role="status">{scoringLabel(lastJob)}</p>:null}{busy?<p role="status">{busy} {busy.includes("评估")&&"提交后可离开页面，结果会自动保存。"}</p>:notice?<p>{notice}</p>:null}</div>
     {error&&<div role="alert" className="hl-error">{error}<button className="hl-quiet" onClick={load}>重新读取已保存进度</button>{error.includes("登录")&&<Link href="/login">去登录</Link>}</div>}
     <button className="hl-quiet" disabled={!!busy} onClick={load}><RefreshCw size={14}/>重新读取进度</button>
     <div className="hl-step-body" key={row.version+"-"+selected+"-"+step+"-"+adding}>
       {step===0&&<JobStep title={task.title} jd={task.jd} criteria={task.criteria} confirmed={task.confirmed} busy={!!busy||background} act={act} next={()=>setStep(1)}/>}
-      {step===1&&<><ScreeningList people={task.candidates} criteria={task.criteria} selected={selected} busy={!!busy||background} act={act} choose={p=>{rememberCandidate(p);setRubricDirty(false);setSelected(p.id);setAdding(false);setStep(currentStep(task,p));}} add={()=>{setAdding(true);setNotice("");}} synthetic={task.synthetic}/>{(adding||!person||!person.resumeConfirmed)&&<ResumeStep person={person} synthetic={task.synthetic} busy={!!busy||background} act={act} next={()=>setStep(2)} onError={setError}/>}</>}
-      {step===2&&person&&<InterviewRecord taskId={id} person={person} synthetic={task.synthetic} busy={!!busy||background} act={act} next={()=>setStep(3)} onError={setError}/>}
-      {step===3&&person&&<><FinalRubric criteria={task.evaluationCriteria||task.criteria} locked={task.candidates.some(p=>!!p.assessment)} busy={!!busy||background} act={act} dirty={setRubricDirty}/><AssessmentStep person={person} criteria={task.evaluationCriteria||task.criteria} busy={!!busy||background||rubricDirty} act={act} title={task.title} add={()=>{setAdding(true);setStep(1);setNotice("");}}/></>}
+      {step===1&&<><ScreeningList people={task.candidates} criteria={task.criteria} selected={selected} busy={!!busy} activeCandidateIds={new Set(activeJobs.map(job=>job.candidateId))} act={act} choose={p=>{rememberCandidate(p);setRubricDirty(false);setSelected(p.id);setAdding(false);setStep(currentStep(task,p));}} add={()=>{setAdding(true);setNotice("");}} synthetic={task.synthetic}/>{(adding||!person||!person.resumeConfirmed)&&<ResumeStep person={person} synthetic={task.synthetic} busy={!!busy||!!selectedJob} act={act} next={()=>setStep(2)} onError={setError}/>}</>}
+      {step===2&&person&&<InterviewRecord taskId={id} person={person} synthetic={task.synthetic} busy={!!busy||!!selectedJob} act={act} next={()=>setStep(3)} onError={setError}/>}
+      {step===3&&person&&<><FinalRubric criteria={task.evaluationCriteria||task.criteria} locked={task.candidates.some(p=>!!p.assessment)} busy={!!busy||background} act={act} dirty={setRubricDirty}/><AssessmentStep person={person} criteria={task.evaluationCriteria||task.criteria} busy={!!busy||!!selectedJob||rubricDirty} act={act} title={task.title} add={()=>{setAdding(true);setStep(1);setNotice("");}}/></>}
     </div>
     {task.confirmed&&step===1&&!adding&&task.candidates.length>0&&<button className="hl-quiet hl-add" disabled={!!busy} onClick={()=>{setAdding(true);setStep(1);setNotice("");}}><Plus size={16}/>添加另一位候选人</button>}
-    <DataLifecycle row={row} person={person} busy={!!busy||background} act={lifecycle}/>
+    <DataLifecycle row={row} person={person} busy={!!busy||!!selectedJob} act={lifecycle}/>
     <details className="hl-history"><summary>查看本任务的操作记录（{task.audit.length}）</summary><ol>{[...task.audit].reverse().map((a,i)=><li key={i}><time>{new Date(a.at).toLocaleString("zh-CN")}</time><span>{a.action}</span></li>)}</ol></details>
   </div>;
 }
@@ -95,17 +97,18 @@ function DataLifecycle({row,person,busy,act}:{row:TaskRecord;person?:Person;busy
 }
 
 function JobStep({title:initialTitle,jd:initialJd,criteria:initialCriteria,confirmed,busy,act,next}:{title:string;jd:string;criteria:Criterion[];confirmed:boolean;busy:boolean;act:Act;next:()=>void}){
-  const [title,setTitle]=useState(initialTitle);const [jd,setJd]=useState(initialJd);const [criteria,setCriteria]=useState(initialCriteria);const [manualMode,setManualMode]=useState(false);
+  const [title,setTitle]=useState(initialTitle);const [jd,setJd]=useState(initialJd);const [criteria,setCriteria]=useState(initialCriteria);const [manualMode,setManualMode]=useState(false);const [criteriaBackup,setCriteriaBackup]=useState<Criterion[]|null>(null);
   const total=criteria.reduce((n,c)=>n+c.weight,0);
-  function useManualCriteria(){setManualMode(true);setCriteria([{id:"custom-1",name:"自定义维度 1",description:"写明要从简历核实的行动、产出或结果证据。",weight:34},{id:"custom-2",name:"自定义维度 2",description:"写明相关经验与可迁移经验的判断边界。",weight:33},{id:"custom-3",name:"自定义维度 3",description:"写明该维度的关键要求和不满足时的判断方式。",weight:33}]);}
+  function useManualCriteria(){setCriteriaBackup(copyCriteria(criteria));setManualMode(true);setCriteria(createManualCriteria());}
+  function restoreCriteria(){if(!criteriaBackup)return;setCriteria(copyCriteria(criteriaBackup));setCriteriaBackup(null);setManualMode(false);}
   return <section><header className="hl-section-intro"><h2>{confirmed?"招聘要求已确认":"先说清楚，你要招什么样的人"}</h2><p>粘贴任意岗位 JD，AI 会先起草岗位专属的简历评分维度；你可以修改一部分，也可以全部重设。面试后的综合评估可使用另一套标准。</p></header>
     <fieldset disabled={confirmed||busy} className="hl-fields">
       <label>岗位名称<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="例如：后端工程师、招商主管、财务会计" maxLength={100}/></label>
       <label>岗位描述（JD）<textarea rows={5} value={jd} onChange={e=>setJd(e.target.value)} placeholder="粘贴岗位职责与能力要求，至少30字" maxLength={15000}/></label>
     </fieldset>
-    {!confirmed&&<div className="hl-model-actions"><button className="hl-secondary" disabled={busy||title.trim().length<2||jd.trim().length<30} onClick={()=>act({action:"parse",title,jd},"AI 正在根据 JD 生成岗位专属评分维度，通常需要 20–60 秒…")}>{criteria.length?"根据当前 JD 重新生成":"AI 生成评分维度"}<ArrowRight size={16}/></button>{criteria.length>0&&<button className="hl-quiet" disabled={busy} onClick={useManualCriteria}>全部改为自定义</button>}</div>}
+    {!confirmed&&<div className="hl-model-actions"><button type="button" className="hl-secondary" disabled={busy||title.trim().length<2||jd.trim().length<30} onClick={()=>act({action:"parse",title,jd},"AI 正在根据 JD 生成岗位专属评分维度，通常需要 20–60 秒…")}>{criteria.length?"根据当前 JD 重新生成":"AI 生成评分维度"}<ArrowRight size={16}/></button>{criteria.length>0&&(manualMode&&criteriaBackup?<button type="button" className="hl-quiet" disabled={busy} onClick={restoreCriteria}>恢复切换前的维度</button>:<button type="button" className="hl-quiet" disabled={busy} onClick={useManualCriteria}>从 3 项空白框架开始</button>)}</div>}
     {criteria.length===0&&!confirmed?<div className="hl-criteria-empty"><h3>评分维度将在这里生成</h3><p>先填写岗位名称和完整 JD。系统不会默认套用产品经理、技术或其他岗位模板。</p></div>:null}
-    {criteria.length>0&&<div className="hl-criteria"><div className="hl-section-title"><div><h3>简历初筛评分维度</h3><p>{manualMode?"已切换为完全自定义框架；请按你的招聘标准重写。":"AI 已根据当前 JD 起草，确认前不会用于任何候选人。"}</p></div><span className={total===100?"":"hl-invalid"}>权重合计 {total}%</span></div><p className="hl-help">可改名称、说明和权重。真正不可缺少的能力可设为硬性条件；它只改变风险分组，不会自动淘汰候选人。</p>
+    {criteria.length>0&&<div className="hl-criteria"><div className="hl-section-title"><div><h3>简历初筛评分维度</h3><p>{manualMode?"正在使用 3 项空白框架；可随时恢复切换前的维度。":"AI 已根据当前 JD 起草，确认前不会用于任何候选人。"}</p></div><span className={total===100?"":"hl-invalid"}>权重合计 {total}%</span></div><p className="hl-help">可改名称、说明和权重，支持 3–8 项。真正不可缺少的能力可设为硬性条件；它只改变风险分组，不会自动淘汰候选人。</p>
       <CriteriaEditor criteria={criteria} onChange={setCriteria} disabled={confirmed||busy}/>
     </div>}
     <div className="hl-footer-action"><span>{confirmed?"要求已锁定；如需改变招聘方向，请另建任务。":"确认后添加简历并查看筛选排名。"}</span>{confirmed?<button className="hl-primary" onClick={next}>继续添加候选人<ArrowRight size={16}/></button>:<div><button className="hl-quiet" disabled={busy||title.trim().length<2||jd.trim().length<30} onClick={()=>act({action:"job",title,jd,criteria,confirm:false},"正在保存草稿…")}>保存草稿</button><button className="hl-primary" disabled={busy||total!==100||criteria.length<3||title.trim().length<2||jd.trim().length<30} onClick={()=>act({action:"job",title,jd,criteria,confirm:true},"正在保存招聘要求…")}>确认要求，下一步<ArrowRight size={16}/></button></div>}</div>
@@ -167,15 +170,16 @@ function AssessmentStep({person,criteria,busy,act,title,add}:{person:Person;crit
   </section>;
 }
 function CriteriaEditor({criteria,onChange,disabled}:{criteria:Criterion[];onChange:(v:Criterion[])=>void;disabled:boolean}){
- function add(){const next=[...criteria,{id:"custom-"+crypto.randomUUID(),name:"新评估维度",description:"写明要从材料中核实的具体行动、产出或结果。",weight:1}];const base=Math.floor(100/next.length),remainder=100-base*next.length;onChange(next.map((item,index)=>({...item,weight:base+(index<remainder?1:0)})));}
- return <><div className="hl-criteria-editor">{criteria.map((c,i)=><div className="hl-criterion" key={c.id}><div><input aria-label={"第"+(i+1)+"项能力名称"} value={c.name} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,name:e.target.value}:x))}/><textarea rows={2} aria-label={c.name+"说明"} value={c.description} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,description:e.target.value}:x))}/><label className="hl-hard-toggle"><input type="checkbox" checked={!!c.mustHave} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,mustHave:e.target.checked,minimumScore:e.target.checked?(x.minimumScore||60):undefined}:x))}/>设为硬性条件</label>{c.mustHave&&<label className="hl-minimum-score">最低参考线<input type="number" min={1} max={100} value={c.minimumScore||60} disabled={disabled} aria-label={c.name+"硬性条件最低参考线"} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,minimumScore:Number(e.target.value)}:x))}/><span>分</span></label>}</div><label>权重 %<input type="number" min={1} max={100} aria-label={c.name+"权重"} value={c.weight} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,weight:Number(e.target.value)}:x))}/></label>{!disabled&&<button className="hl-quiet" aria-label={"移除"+c.name} disabled={criteria.length<=3} onClick={()=>onChange(criteria.filter(x=>x.id!==c.id))}>移除</button>}</div>)}</div>{!disabled&&<button className="hl-quiet" disabled={criteria.length>=8} onClick={add}><Plus size={15}/>添加评分维度并自动均分权重</button>}</>;
+ function add(){onChange(addCriterion(criteria,"custom-"+crypto.randomUUID()));}
+ const atMaximum=criteria.length>=MAX_CRITERIA;
+ return <><div className="hl-criteria-editor">{criteria.map((c,i)=><div className="hl-criterion" key={c.id}><div><input aria-label={"第"+(i+1)+"项能力名称"} value={c.name} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,name:e.target.value}:x))}/><textarea rows={2} aria-label={c.name+"说明"} value={c.description} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,description:e.target.value}:x))}/><label className="hl-hard-toggle"><input type="checkbox" checked={!!c.mustHave} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,mustHave:e.target.checked,minimumScore:e.target.checked?(x.minimumScore||60):undefined}:x))}/>设为硬性条件</label>{c.mustHave&&<label className="hl-minimum-score">最低参考线<input type="number" min={1} max={100} value={c.minimumScore||60} disabled={disabled} aria-label={c.name+"硬性条件最低参考线"} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,minimumScore:Number(e.target.value)}:x))}/><span>分</span></label>}</div><label>权重 %<input type="number" min={1} max={100} aria-label={c.name+"权重"} value={c.weight} disabled={disabled} onChange={e=>onChange(criteria.map(x=>x.id===c.id?{...x,weight:Number(e.target.value)}:x))}/></label>{!disabled&&<button type="button" className="hl-quiet" aria-label={"移除"+c.name} disabled={criteria.length<=MIN_CRITERIA} onClick={()=>onChange(criteria.filter(x=>x.id!==c.id))}>移除</button>}</div>)}</div>{!disabled&&<div className="hl-criteria-add"><button type="button" className="hl-quiet" disabled={atMaximum} onClick={add}><Plus size={15}/>{atMaximum?`已达到 ${MAX_CRITERIA} 项上限`:"添加评分维度并自动均分权重"}</button>{atMaximum&&<span>如需新增，请先移除上方任意一项。</span>}</div>}</>;
 }
 function FinalRubric({criteria,locked,busy,act,dirty}:{criteria:Criterion[];locked:boolean;busy:boolean;act:Act;dirty:(value:boolean)=>void}){
  const [items,setItems]=useState(criteria);const total=items.reduce((a,c)=>a+c.weight,0);
  const changed=JSON.stringify(items)!==JSON.stringify(criteria);
  return <details className="hl-final-rubric"><summary>综合评估标准 · {criteria.length} 项（{locked?"已用于评估":"可使用默认或自定义"}）</summary><p>这是面试后的综合评估标准，可与简历初筛不同。修改后须先保存；生成评估后锁定，保证候选人之间口径一致。</p><CriteriaEditor criteria={items} onChange={value=>{setItems(value);dirty(JSON.stringify(value)!==JSON.stringify(criteria));}} disabled={busy||locked}/><div className="hl-footer-action"><span>合计 {total}%{changed?" · 请保存后再生成评估":""}</span>{!locked&&<button className="hl-secondary" disabled={busy||total!==100||!changed} onClick={()=>act({action:"rubric",criteria:items},"正在保存综合评估标准…")}>保存综合评估标准</button>}</div></details>;
 }
-function ScreeningList({people,criteria,selected,busy,act,choose,add,synthetic}:{people:Person[];criteria:Criterion[];selected:string;busy:boolean;act:Act;choose:(p:Person)=>void;add:()=>void;synthetic:boolean}){
+function ScreeningList({people,criteria,selected,busy,activeCandidateIds,act,choose,add,synthetic}:{people:Person[];criteria:Criterion[];selected:string;busy:boolean;activeCandidateIds:Set<string>;act:Act;choose:(p:Person)=>void;add:()=>void;synthetic:boolean}){
  const rankValue=(p:Person)=>p.screening?.scoringVersion===SCREENING_POLICY&&p.screening.retrieval?.mode==='hybrid'?screeningValue(p,criteria):null;
  const ranked=[...people].sort((a,b)=>{const order={met:0,none:0,verify:1,unmet:2};const ag=hardRequirementResult(a,criteria,"screening"),bg=hardRequirementResult(b,criteria,"screening");if(order[ag.state]!==order[bg.state])return order[ag.state]-order[bg.state];return(rankValue(b)??-1)-(rankValue(a)??-1);});
  const labels={supported:"直接匹配",low_match:"低匹配",partial_match:"部分 / 可迁移匹配",insufficient:"材料不足，无法判断",conflict:"存在冲突，待核实"};
@@ -187,12 +191,13 @@ function ScreeningList({people,criteria,selected,busy,act,choose,add,synthetic}:
  const canRescore=legacy&&!p.shortlisted&&!p.assessment&&!p.review;
  const total=rankValue(p);
  const gate=hardRequirementResult(p,criteria,"screening");
- return <article key={p.id} className={selected===p.id?"selected":""}><div><span className="hl-rank">{total!==null?i+1:"—"}</span><button className="hl-quiet" onClick={()=>choose(p)} disabled={busy}>{p.name}</button><small>{p.review?"评估已确认":p.shortlisted?"进入面试":!p.resumeConfirmed?"等待脱敏确认":p.screening?"初筛已评分":"等待评分"}</small>{p.screening&&gate.state!=="none"&&<em className={`hl-hard-badge is-${gate.state}`}>{hardRequirementLabel[gate.state]}</em>}</div>
+ const candidateBusy=busy||activeCandidateIds.has(p.id);
+ return <article key={p.id} className={selected===p.id?"selected":""}><div><span className="hl-rank">{total!==null?i+1:"—"}</span><button className="hl-quiet" onClick={()=>choose(p)} disabled={busy}>{p.name}</button><small>{activeCandidateIds.has(p.id)?"评分排队或进行中":p.review?"评估已确认":p.shortlisted?"进入面试":!p.resumeConfirmed?"等待脱敏确认":p.screening?"初筛已评分":"等待评分"}</small>{p.screening&&gate.state!=="none"&&<em className={`hl-hard-badge is-${gate.state}`}>{hardRequirementLabel[gate.state]}</em>}</div>
  <div>{p.screening&&(legacy?<span className="hl-help">旧版评分 / 检索 · 可查看历史</span>:total===null?<span className="hl-help">有待补充或核实项，暂不排名</span>:<span className="hl-ranking-score">{total.toFixed(1)}<small>岗位匹配分</small></span>)}
- {!p.resumeConfirmed?<button className="hl-secondary" disabled={busy} onClick={()=>choose(p)}>检查资料</button>:!p.screening?<button className="hl-primary" disabled={busy} onClick={()=>act({action:"screen",candidateId:p.id},"正在评估 "+p.name+" 的简历…")}>评分简历</button>:<>
- {canRescore&&<button className="hl-primary" disabled={busy} onClick={()=>act({action:"rescreen",candidateId:p.id},"正在按新规则评估简历，旧结果将保留…")}>按新规则重新评分</button>}
- {!p.shortlisted?<button className={canRescore?"hl-secondary":"hl-primary"} disabled={busy} onClick={()=>act({action:"shortlist",candidateId:p.id},"正在保存面试人选…")}>选择进入面试</button>:<button className="hl-secondary" disabled={busy} onClick={()=>choose(p)}>查看此候选人</button>}</>}
- {!p.shortlisted&&!p.assessment&&!p.review&&<button className="hl-danger-link" aria-label={`移除${p.name}`} disabled={busy} onClick={()=>{if(confirm(`移除“${p.name}”？该候选人的简历和评分将从本任务中删除。`))void act({action:"removeCandidate",candidateId:p.id},"正在移除候选人…");}}><Trash2 size={14}/>移除</button>}</div>
+ {!p.resumeConfirmed?<button className="hl-secondary" disabled={candidateBusy} onClick={()=>choose(p)}>检查资料</button>:!p.screening?<button className="hl-primary" disabled={candidateBusy} onClick={()=>act({action:"screen",candidateId:p.id},"正在评估 "+p.name+" 的简历…")}>{activeCandidateIds.has(p.id)?"评分处理中":"评分简历"}</button>:<>
+ {canRescore&&<button className="hl-primary" disabled={candidateBusy} onClick={()=>act({action:"rescreen",candidateId:p.id},"正在按新规则评估简历，旧结果将保留…")}>按新规则重新评分</button>}
+ {!p.shortlisted?<button className={canRescore?"hl-secondary":"hl-primary"} disabled={candidateBusy} onClick={()=>act({action:"shortlist",candidateId:p.id},"正在保存面试人选…")}>选择进入面试</button>:<button className="hl-secondary" disabled={busy} onClick={()=>choose(p)}>查看此候选人</button>}</>}
+ {!p.shortlisted&&!p.assessment&&!p.review&&<button className="hl-danger-link" aria-label={`移除${p.name}`} disabled={candidateBusy} onClick={()=>{if(confirm(`移除“${p.name}”？该候选人的简历和评分将从本任务中删除。`))void act({action:"removeCandidate",candidateId:p.id},"正在移除候选人…");}}><Trash2 size={14}/>移除</button>}</div>
  {p.screening&&<details><summary>查看评分依据 · 已评分 {p.screening.scores.filter(s=>s.score!==null).length}/{criteria.length} 项</summary>
  {legacy&&<p>这份历史结果使用了旧评分规则或关键词召回。尚未进入面试的候选人可使用混合 RAG 重评，原结果保留；后续流程中的历史评分不改写。</p>}
  <p>{p.screening.summary}</p>{p.screening.scores.map(s=><div className="hl-screening-score" key={s.criterionId}><strong>{criteria.find(c=>c.id===s.criterionId)?.name} · {s.score??"暂不评分"} · {labels[s.status]}</strong><p>{s.claim}</p>{s.sourceIds.map(id=>{const source=p.sources.find(x=>x.id===id);return source&&<blockquote key={id}><cite>{source.locator}</cite><p>{source.text}</p></blockquote>;})}</div>)}

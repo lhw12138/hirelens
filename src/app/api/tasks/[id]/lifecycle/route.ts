@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { setRetention, taskIsArchived, type RetentionDays } from "@/lib/data-lifecycle";
-import { scoringActive } from "@/lib/scoring-job";
+import { candidateScoringJob } from "@/lib/scoring-job";
 import type { HiringTask } from "@/lib/workflow";
 import { getPool } from "@/server/db/client";
 import { objectStore } from "@/server/storage/object-store";
@@ -51,7 +51,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         task.audit.push({ at: new Date().toISOString(), action: "撤销候选人访问链接", candidateId: person.id });
       } else {
         if (input.confirmName !== person.name) throw new WorkflowError("候选人称呼不一致，未执行删除。", 400);
-        if (scoringActive(task.scoringJob) && task.scoringJob?.candidateId === person.id) throw new WorkflowError("该候选人正在后台评分，请等待完成后再删除。", 409);
+        if (candidateScoringJob(task, person.id)) throw new WorkflowError("该候选人正在后台评分，请等待完成后再删除。", 409);
         await objectStore.deletePrefix(`tasks/${id}/${person.id}/`);
         await connection.query("DELETE FROM workflow_vectors WHERE task_id=$1 AND candidate_id=$2", [id, person.id]);
         await connection.query("DELETE FROM interview_notices WHERE task_id=$1 AND candidate_id=$2", [id, person.id]);

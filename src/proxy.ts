@@ -12,8 +12,11 @@ export function isAllowedOrigin(origin: string | null, requestOrigin: string, co
  return received!==null&&[normalize(requestOrigin),normalize(configuredOrigin)].includes(received);
 }
 
+export function isInternalEvalPath(path:string){return path==='/evals'||path.startsWith('/api/evals/');}
+
 export async function proxy(request:NextRequest){
  const path=request.nextUrl.pathname;
+ if(isInternalEvalPath(path)&&process.env.ENABLE_INTERNAL_EVALS!=='true')return path.startsWith('/api/')?NextResponse.json({error:'Not found'},{status:404}):NextResponse.redirect(new URL('/',request.url));
  if(!['GET','HEAD','OPTIONS'].includes(request.method)) {
    const origin=request.headers.get('origin');
    if(!isAllowedOrigin(origin,request.nextUrl.origin,process.env.APP_ORIGIN))return NextResponse.json({error:'请在当前网站内操作。'},{status:403});

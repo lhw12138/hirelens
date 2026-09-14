@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { loadTask, requireOwner, saveTask, WorkflowError } from '@/server/workflow/store';
-import {scoringActive} from '@/lib/scoring-job';
+import {activeScoringJobs,candidateScoringJob,queueScoringJob} from '@/lib/scoring-job';
 import {getPool} from '@/server/db/client';
 import { parseJob } from '@/server/workflow/model';
 import { COMBINED_POLICY, SCREENING_POLICY, criterionSchema, questionsFor, validateCriteria, validateReview, type Person } from '@/lib/workflow';
@@ -42,11 +42,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const row = await loadTask(id, owner);
     if (row.version !== version) throw new WorkflowError('任务已在其他页面更新，请刷新后继续。', 409);
     const task = row.data;
-    if(scoringActive(task.scoringJob))throw new WorkflowError('本任务正在后台评分，可以切换页面。评分完成后再修改本任务。',409);
+    const activeJobs=activeScoringJobs(task);
+    if(activeJobs.length&&['rubric','job','parse'].includes(input.action))throw new WorkflowError('有候选人正在后台评分，评分标准暂时不能修改；仍可处理其他候选人。',409);
     let person: Person | undefined;
     if ('candidateId' in input) {
       person = task.candidates.find(p => p.id === input.candidateId);
       if (!person) throw new WorkflowError('找不到该候选人。', 404);
+      if(candidateScoringJob(task,person.id))throw new WorkflowError('这位候选人正在排队或评分中；你可以先处理其他候选人。',409);
     }
     let action = '';
     if (input.action === 'rubric') {
@@ -95,7 +97,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         if (input.action === 'screen' && person.screening) throw new WorkflowError('简历已评分，请查看结果。',409);
         if (input.action === 'rescreen' && (!person.screening || (person.screening.scoringVersion === SCREENING_POLICY && (person.screening.retrieval?.mode === 'hybrid' || process.env.RAG_MODE === 'keyword')) || person.shortlisted || person.assessment)) throw new WorkflowError('只有尚未进入面试的旧版初筛可以按新规则重评；已进入后续流程的记录保持不变。',409);
         await consumeHrAiUsage(owner);
-        task.scoringJob={id:crypto.randomUUID(),candidateId:person.id,action:input.action,status:'queued',queuedAt:new Date().toISOString()};
+        queueScoringJob(task,{id:crypto.randomUUID(),candidateId:person.id,action:input.action,status:'queued',queuedAt:new Date().toISOString()});
         action='已提交后台简历评分';
       } else if (input.action === 'shortlist') {
         if (!person.screening) throw new WorkflowError('请先完成简历筛选评分。');
@@ -136,7 +138,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         if (input.action === 'reassess' && (!person.assessment || person.assessment.scoringVersion === COMBINED_POLICY)) throw new WorkflowError('当前评估已经使用最新综合评估规则。', 409);
         if(!person.shortlisted||!person.resumeConfirmed)throw new WorkflowError('请先完成简历筛选。');
         await consumeHrAiUsage(owner);
-        task.scoringJob={id:crypto.randomUUID(),candidateId:person.id,action:input.action,status:'queued',queuedAt:new Date().toISOString()};action=input.action==='reassess'?'已按暂估分新规则重新提交综合评估':'已提交后台综合评估';
+        queueScoringJob(task,{id:crypto.randomUUID(),candidateId:person.id,action:input.action,status:'queued',queuedAt:new Date().toISOString()});action=input.action==='reassess'?'已按暂估分新规则重新提交综合评估':'已提交后台综合评估';
       } else if (input.action === 'review') {
         try { validateReview(person, input); } catch(e) { throw new WorkflowError((e as Error).message); }
         person.review = { scores: input.scores, reason: input.reason, conflictNote: input.conflictNote, decision: input.decision, confirmedAt: new Date().toISOString() };
@@ -145,7 +147,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       }
     }
     const updated = await saveTask(task, version, owner, action, 'candidateId' in input ? input.candidateId : person?.id);
-    return NextResponse.json(publicTaskRecord(updated),{status:scoringActive(updated.data.scoringJob)?202:200});
+    const submittedScoring=['screen','rescreen','assess','reassess'].includes(input.action);
+    return NextResponse.json(publicTaskRecord(updated),{status:submittedScoring?202:200});
   } catch(e) { return failure(e); }
 }
 export async function DELETE(request:Request,ctx:{params:Promise<{id:string}>}){

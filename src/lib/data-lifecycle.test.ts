@@ -11,6 +11,12 @@ describe("data lifecycle", () => {
     expect(value.purgeAfter).toBe("2026-10-10T00:00:00.000Z");
     expect(value.scoringJob?.status).toBe("cancelled");
   });
+  it("cancels every queued candidate score when a task is archived", () => {
+    const value = task();
+    value.scoringJobs = [value.scoringJob!, { ...value.scoringJob!, id: "job-2", candidateId: "candidate-2", status: "queued" }];
+    archiveTask(value, new Date("2026-09-10T00:00:00.000Z"));
+    expect(value.scoringJobs.map(job => job.status)).toEqual(["cancelled", "cancelled"]);
+  });
   it("keeps archived data until manual deletion when retention is disabled", () => {
     const value = archiveTask(setRetention(task(), null));
     expect(value.purgeAfter).toBeUndefined();

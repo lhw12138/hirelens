@@ -23,7 +23,7 @@ export type Person = {
   assessmentHistory?: Assessment[];
   invitation?: { hash: string; expiresAt: string; sessionHash?: string };
 };
-export type HiringTask = { deletedAt?:string; archivedAt?:string; retentionDays?:30|90|null; purgeAfter?:string; demoDatasetKey?:string; scoringJob?:ScoringJob; id: string; title: string; jd: string; synthetic: boolean; confirmed: boolean; criteria: Criterion[]; evaluationCriteria?: Criterion[]; candidates: Person[]; audit: { at: string; action: string; candidateId?: string }[] };
+export type HiringTask = { deletedAt?:string; archivedAt?:string; retentionDays?:30|90|null; purgeAfter?:string; demoDatasetKey?:string; scoringJob?:ScoringJob; scoringJobs?:ScoringJob[]; id: string; title: string; jd: string; synthetic: boolean; confirmed: boolean; criteria: Criterion[]; evaluationCriteria?: Criterion[]; candidates: Person[]; audit: { at: string; action: string; candidateId?: string }[] };
 export type TaskRecord = { id: string; version: number; updatedAt: string; data: HiringTask };
 export const steps = ['确认岗位要求', '筛选简历', '安排面试与记录', '综合评估与审核'];
 export function currentStep(task: HiringTask, person?: Person) {

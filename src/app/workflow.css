@@ -129,6 +129,8 @@
 .hl-criterion>div input:first-child { font-weight:650; }
 .hl-criterion>div textarea { min-height:70px; margin-top:8px; font-size:14px; }
 .hl-criterion>label { width:80px; flex:none; font-size:12px!important; }
+.hl-criteria-add { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.hl-criteria-add>span { color:var(--hl-muted); font-size:13px; }
 .hl-invalid { color:#ac341c; }
 .hl-footer-action { margin-top:28px; padding-top:22px; border-top:1px solid var(--hl-line); display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .hl-footer-action>span { color:var(--hl-muted); font-size:13px; max-width:42ch; }

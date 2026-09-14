@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedOrigin, isPublicPath } from "./proxy";
+import { isAllowedOrigin, isInternalEvalPath, isPublicPath } from "./proxy";
 
 describe("proxy public paths", () => {
   it("keeps the deployment liveness endpoint public", () => {
@@ -9,6 +9,14 @@ describe("proxy public paths", () => {
   it("does not expose operational health details", () => {
     expect(isPublicPath("/api/health")).toBe(false);
     expect(isPublicPath("/health")).toBe(false);
+  });
+});
+
+describe("internal evaluation surface",()=>{
+  it("identifies the internal page and APIs without hiding ordinary HR routes",()=>{
+    expect(isInternalEvalPath("/evals")).toBe(true);
+    expect(isInternalEvalPath("/api/evals/run")).toBe(true);
+    expect(isInternalEvalPath("/tasks/one")).toBe(false);
   });
 });
 
