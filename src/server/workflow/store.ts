@@ -26,7 +26,7 @@ export async function loadTask(id: string, owner?: string, includeDeleted=false)
 export async function saveTask(data: HiringTask, version: number, owner: string, action: string, candidateId?: string) {
   data.audit.push({ at: new Date().toISOString(), action, candidateId });
   const [row] = await getDatabase().update(hiringTasks).set({ data, version: version + 1, updatedAt: new Date() })
-    .where(and(eq(hiringTasks.id, data.id), eq(hiringTasks.ownerEmail, owner), eq(hiringTasks.version, version), sql`COALESCE(${hiringTasks.data}->>'archivedAt',${hiringTasks.data}->>'deletedAt') IS NULL`, sql`COALESCE(${hiringTasks.data}->'scoringJob'->>'status','') NOT IN ('queued','running')`)).returning();
+    .where(and(eq(hiringTasks.id, data.id), eq(hiringTasks.ownerEmail, owner), eq(hiringTasks.version, version), sql`COALESCE(${hiringTasks.data}->>'archivedAt',${hiringTasks.data}->>'deletedAt') IS NULL`)).returning();
   if (!row) throw new WorkflowError('这项任务刚刚有更新。请刷新后继续，已保存的数据不会丢失。', 409);
   return row;
 }
